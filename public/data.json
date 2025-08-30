@@ -1,0 +1,32 @@
+{
+  "shops": [
+    {
+      "id": 1,
+      "name": "Al Ameen Traders & Co.",
+      "subtitle": "And an option to upgrade every three years",
+      "image": "https://images.unsplash.com/photo-1506818144585-78eef8046f44?q=80&w=1200&auto=format&fit=crop",
+      "url": "/shops/1"
+    },
+    {
+      "id": 2,
+      "name": "City Mart Super Shop",
+      "subtitle": "Best prices on household essentials",
+      "image": "https://images.unsplash.com/photo-1504148455329-4b06accb19fc?q=80&w=1200&auto=format&fit=crop",
+      "url": "/shops/2"
+    },
+    {
+      "id": 3,
+      "name": "Green Line Store",
+      "subtitle": "Daily discounts and offers",
+      "image": "https://images.unsplash.com/photo-1515706886582-54c73c5eaf41?q=80&w=1200&auto=format&fit=crop",
+      "url": "/shops/3"
+    },
+    {
+      "id": 4,
+      "name": "Neighborhood Corner Shop",
+      "subtitle": "Your friendly store next door",
+      "image": "https://images.unsplash.com/photo-1556767576-cfba5cde9fef?q=80&w=1200&auto=format&fit=crop",
+      "url": "/shops/4"
+    }
+  ]
+}
