@@ -88,9 +88,14 @@ export default function Hero() {
           <h2 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-zinc-900 leading-tight">
             Our product
             <br />
-            that <span className="relative inline-block">
-              <span className="relative z-10">Best</span>
-              <span className="absolute -inset-1 translate-y-3 rotate-[-4deg] rounded bg-green-500/70 -z-0" aria-hidden></span>
+            that
+            <span className="relative inline-block align-middle ml-1">
+              <img 
+                src="/Vector.png" 
+                alt="Background decoration" 
+                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[300px] h-auto z-0"
+              />
+              <span className="relative px-8 py-4 z-10">Best</span>
             </span>
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-zinc-700">

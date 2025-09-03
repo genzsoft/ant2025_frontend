@@ -1,9 +1,36 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 
 function Navbar() {
   const [open, setOpen] = useState(false);
+  const [user, setUser] = useState(null);
+
+  // Check for user login status
+  useEffect(() => {
+    const checkUserStatus = () => {
+      const savedUser = localStorage.getItem('user');
+      if (savedUser) {
+        setUser(JSON.parse(savedUser));
+      } else {
+        setUser(null);
+      }
+    };
+
+    // Initial check
+    checkUserStatus();
+
+    // Listen for storage changes (when user logs in/out in another tab)
+    window.addEventListener('storage', checkUserStatus);
+
+    // Custom event listener for login/logout in same tab
+    window.addEventListener('userStatusChanged', checkUserStatus);
+
+    return () => {
+      window.removeEventListener('storage', checkUserStatus);
+      window.removeEventListener('userStatusChanged', checkUserStatus);
+    };
+  }, []);
 
   const navItems = [
     { label: 'Home', to: '/' },
@@ -43,16 +70,32 @@ function Navbar() {
                 </li>
               ))}
             </ul>
-            <Link
-              to="/auth"
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-600"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 25 24" fill="none" aria-hidden>
-                <path d="M17.228 8.5C17.228 5.73858 14.9894 3.5 12.228 3.5C9.46661 3.5 7.22803 5.73858 7.22803 8.5C7.22803 11.2614 9.46661 13.5 12.228 13.5C14.9894 13.5 17.228 11.2614 17.228 8.5Z" stroke="#141B34" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M19.228 20.5C19.228 16.634 16.094 13.5 12.228 13.5C8.36204 13.5 5.22803 16.634 5.22803 20.5" stroke="#141B34" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span className="whitespace-nowrap">Log in / Register</span>
-            </Link>
+            {user ? (
+              // Profile Icon when logged in
+              <Link
+                to="/profile"
+                className="inline-flex items-center gap-2 whitespace-nowrap rounded-md p-1.5 hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600 transition-colors"
+                title={`Profile - ${user.name}`}
+              >
+                <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </Link>
+            ) : (
+              // Login/Register button when not logged in
+              <Link
+                to="/auth"
+                className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-600"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 25 24" fill="none" aria-hidden>
+                  <path d="M17.228 8.5C17.228 5.73858 14.9894 3.5 12.228 3.5C9.46661 3.5 7.22803 5.73858 7.22803 8.5C7.22803 11.2614 9.46661 13.5 12.228 13.5C14.9894 13.5 17.228 11.2614 17.228 8.5Z" stroke="#141B34" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M19.228 20.5C19.228 16.634 16.094 13.5 12.228 13.5C8.36204 13.5 5.22803 16.634 5.22803 20.5" stroke="#141B34" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="whitespace-nowrap">Log in / Register</span>
+              </Link>
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -91,13 +134,28 @@ function Navbar() {
                 </li>
               ))}
               <li>
-                <Link
-                  to="/auth"
-                  onClick={() => setOpen(false)}
-                  className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                >
-                  <span>Log in / Register</span>
-                </Link>
+                {user ? (
+                  // Profile link for mobile
+                  <Link
+                    to="/profile"
+                    onClick={() => setOpen(false)}
+                    className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-md border border-green-600 bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                    </svg>
+                    <span>Profile - {user.name}</span>
+                  </Link>
+                ) : (
+                  // Login/Register for mobile
+                  <Link
+                    to="/auth"
+                    onClick={() => setOpen(false)}
+                    className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                  >
+                    <span>Log in / Register</span>
+                  </Link>
+                )}
               </li>
             </ul>
           </div>

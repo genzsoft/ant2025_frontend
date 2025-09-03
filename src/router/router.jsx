@@ -7,6 +7,7 @@ import Shops from "../page/Shops";
 import About from "../page/About";
 import Contact from "../page/Contact";
 import Auth from "../page/Auth";
+import Profile from "../page/Profile";
 
 
 export const router = createBrowserRouter([
@@ -21,6 +22,7 @@ export const router = createBrowserRouter([
   { path: "/about", element: <About /> },
   { path: "/contact", element: <Contact /> },
   { path: "/auth", element: <Auth /> },
+  { path: "/profile", element: <Profile /> },
     ]
   }
 ]);
