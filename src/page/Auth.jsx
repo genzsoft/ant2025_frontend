@@ -7,7 +7,7 @@ export default function Auth() {
   const [authMethod, setAuthMethod] = useState('password'); // 'password' or 'otp'
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [signupStep, setSignupStep] = useState('form'); // 'form' or 'otp'
+  const [signupStep, setSignupStep] = useState('form'); // 'form', 'otp', or 'referCode'
   const [otpTimer, setOtpTimer] = useState(0);
   const [user, setUser] = useState(null); // Store user data after successful registration
   const [formData, setFormData] = useState({
@@ -75,14 +75,22 @@ export default function Auth() {
         return;
       }
       
-      // Simulate OTP verification and registration
-      console.log('Verifying OTP and registering user');
+      // Simulate OTP verification
+      console.log('OTP verified successfully');
+      
+      // Move to refer code step
+      setSignupStep('referCode');
+      
+    } else if (activeTab === 'signup' && signupStep === 'referCode') {
+      // Complete registration (with or without refer code)
+      console.log('Completing registration with refer code:', formData.referCode || 'None');
       
       // Mock user data after successful registration
       const userData = {
         id: Date.now(),
         phone: formData.phone,
         name: 'User', // You can add name field to signup form if needed
+        referCode: formData.referCode || null,
         isLoggedIn: true
       };
       
@@ -184,28 +192,38 @@ export default function Auth() {
                       {/* Login Form */}
                       {activeTab === 'login' && (
                         <>
-                          {/* Email Field */}
+                          {/* Phone Number Field */}
                           <div className="self-stretch px-4 md:px-6 py-3 bg-neutral-50 outline-1 outline-offset-[-1px] outline-stone-300 inline-flex justify-start items-center gap-2.5 overflow-hidden">
                             <input
-                              type="email"
-                              name="email"
-                              value={formData.email}
+                              type="tel"
+                              name="phone"
+                              value={formData.phone}
                               onChange={handleInputChange}
-                              placeholder="Email Address*"
+                              placeholder="Phone Number*"
                               className="w-full bg-transparent text-sm md:text-base font-semibold font-['Inter'] leading-normal placeholder:text-neutral-400 focus:outline-none"
                             />
                           </div>
 
-                          {/* Refer Code Field */}
-                          <div className="self-stretch px-4 md:px-6 py-3 bg-neutral-50 outline-1 outline-offset-[-1px] outline-stone-300 inline-flex justify-start items-center gap-2.5 overflow-hidden">
+                          {/* Password Field */}
+                          <div className="self-stretch px-4 md:px-6 py-3 bg-neutral-50 outline-1 outline-offset-[-1px] outline-stone-300 flex justify-between items-center overflow-hidden">
                             <input
-                              type="text"
-                              name="referCode"
-                              value={formData.referCode}
+                              type={showPassword ? 'text' : 'password'}
+                              name="password"
+                              value={formData.password}
                               onChange={handleInputChange}
-                              placeholder="Refer code*"
+                              placeholder="Password*"
                               className="w-full bg-transparent text-sm md:text-base font-semibold font-['Inter'] leading-normal placeholder:text-neutral-400 focus:outline-none"
                             />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="w-5 h-5 md:w-6 md:h-6 relative cursor-pointer flex-shrink-0 ml-2"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                <path d="M21.544 11.045C21.848 11.4713 22 11.6845 22 12C22 12.3155 21.848 12.5287 21.544 12.955C20.1779 14.8706 16.6892 19 12 19C7.31078 19 3.8221 14.8706 2.45604 12.955C2.15201 12.5287 2 12.3155 2 12C2 11.6845 2.15201 11.4713 2.45604 11.045C3.8221 9.12944 7.31078 5 12 5C16.6892 5 20.1779 9.12944 21.544 11.045Z" stroke="#9A9A9A" strokeWidth="1.5" />
+                                <path d="M15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15C13.6569 15 15 13.6569 15 12Z" stroke="#9A9A9A" strokeWidth="1.5" />
+                              </svg>
+                            </button>
                           </div>
                         </>
                       )}
@@ -324,10 +342,50 @@ export default function Auth() {
                           </div>
                         </div>
                       )}
+
+                      {/* Refer Code Step */}
+                      {activeTab === 'signup' && signupStep === 'referCode' && (
+                        <div className="self-stretch flex flex-col gap-4">
+                          {/* Refer Code Info */}
+                          <div className="text-center py-4">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">Referral Code</h3>
+                            <p className="text-sm text-gray-600">
+                              Have a referral code? Enter it below to get bonus rewards!<br />
+                              <span className="text-xs text-gray-500">(This step is optional)</span>
+                            </p>
+                          </div>
+
+                          {/* Refer Code Input */}
+                          <div className="self-stretch px-4 md:px-6 py-3 bg-neutral-50 outline-1 outline-offset-[-1px] outline-stone-300 inline-flex justify-start items-center gap-2.5 overflow-hidden">
+                            <input
+                              type="text"
+                              name="referCode"
+                              value={formData.referCode}
+                              onChange={handleInputChange}
+                              placeholder="Enter referral code (optional)"
+                              className="w-full bg-transparent text-sm md:text-base font-semibold font-['Inter'] leading-normal placeholder:text-neutral-400 focus:outline-none"
+                            />
+                          </div>
+
+                          {/* Skip Button */}
+                          <div className="text-center">
+                            <button
+                              onClick={() => {
+                                // Skip refer code and complete registration
+                                setFormData(prev => ({...prev, referCode: ''}));
+                                handleSignupSubmit(new Event('submit'));
+                              }}
+                              className="text-sm text-gray-600 hover:text-gray-800 font-semibold underline"
+                            >
+                              Skip this step
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Password/OTP Section */}
-                    <div className="self-stretch flex flex-col sm:flex-row justify-start items-center gap-4">
+                    {/* <div className="self-stretch flex flex-col sm:flex-row justify-start items-center gap-4">
                       <div className="w-full sm:flex-1 rounded flex justify-start items-center overflow-hidden">
                         <button
                           onClick={() => setAuthMethod('password')}
@@ -369,10 +427,12 @@ export default function Auth() {
                           </button>
                         )}
                       </div>
-                    </div>
+                    </div> */}
+
+
                   </div>
                   <div className="self-stretch text-right justify-start text-neutral-400 text-sm md:text-base font-semibold font-['Inter'] underline leading-normal cursor-pointer">
-                    {activeTab === 'login' ? 'Forgot Your Password?' : (signupStep === 'otp' ? '' : 'Get OTP?')}
+                    {activeTab === 'login' ? 'Forgot Your Password?' : ''}
                   </div>
                 </div>
               </div>
@@ -385,7 +445,13 @@ export default function Auth() {
                 <div className="justify-start text-white text-sm md:text-base font-semibold font-['Inter'] leading-normal">
                   {activeTab === 'login' 
                     ? 'Log in' 
-                    : (signupStep === 'form' ? 'Get OTP' : 'Verify & Register')
+                    : (signupStep === 'form' 
+                        ? 'Get OTP' 
+                        : (signupStep === 'otp' 
+                            ? 'Verify & Continue' 
+                            : 'Complete Registration'
+                          )
+                      )
                   }
                 </div>
               </button>

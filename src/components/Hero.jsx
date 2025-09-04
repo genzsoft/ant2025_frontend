@@ -50,10 +50,10 @@ export default function Hero() {
   useEffect(() => {
     let mounted = true;
     axios
-      .get('/products.json')
+      .get('/data.json')
       .then((res) => {
         if (!mounted) return;
-        const list = Array.isArray(res.data) ? res.data.slice(0, 5) : [];
+        const list = Array.isArray(res.data?.products) ? res.data.products.slice(0, 5) : [];
         setProducts(list);
       })
       .catch(() => setProducts([]));
@@ -144,7 +144,17 @@ export default function Hero() {
         <div className="mt-20">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
             {products.map((p) => (
-              <ProductCard key={p.id} {...p} />
+              <ProductCard 
+                key={p.id} 
+                imageSrc={p.image}
+                storeName="BD Store"
+                name={p.name}
+                price={p.price}
+                originalPrice={p.price + 50}
+                inStock={true}
+                to={`/product/${p.id}`}
+                compact
+              />
             ))}
           </div>
         </div>

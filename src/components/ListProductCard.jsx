@@ -1,8 +1,9 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
-export default function ListProductCard({ name, brand, price, rating, image, volume, size, shippedFrom }) {
+export default function ListProductCard({ id, name, brand, price, rating, image, volume, size, shippedFrom }) {
   return (
-    <div className="flex items-center gap-6 p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition">
+    <Link to={`/product/${id}`} className="flex items-center gap-6 p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition">
       {/* Product Image */}
       <div className="w-32 h-32 flex-shrink-0">
         <img src={image} alt={name} className="w-full h-full object-cover rounded-lg" />
@@ -37,11 +38,9 @@ export default function ListProductCard({ name, brand, price, rating, image, vol
 
       {/* Price + Action */}
       <div className="flex flex-col items-end">
-        <span className="text-xl font-bold text-orange-500">${price}</span>
-        <button className="mt-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition">
-          Add to Cart
-        </button>
+        <span className="text-xl font-bold text-orange-500">{price} TK</span>
+        <span className="mt-2 px-4 py-2 border border-orange-500 text-orange-600 rounded-lg">View</span>
       </div>
-    </div>
+    </Link>
   );
 }
