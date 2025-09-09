@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getCurrentUser, isAuthenticated, removeTokens } from '../utils/auth.js';
 
 export default function Profile() {
   const [user, setUser] = useState(null);
@@ -13,26 +14,33 @@ export default function Profile() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      const userData = JSON.parse(savedUser);
-      setUser(userData);
-      // Initialize form data with user data
-      setFormData({
-        firstName: userData.name?.split(' ')[0] || 'User',
-        lastName: userData.name?.split(' ')[1] || '',
-        email: userData.email || 'user@example.com',
-        phone: userData.phone || ''
-      });
+    // Check if user is authenticated with valid JWT token
+    if (isAuthenticated()) {
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        setUser(currentUser);
+        // Initialize form data with user data
+        setFormData({
+          firstName: currentUser.name?.split(' ')[0] || 'User',
+          lastName: currentUser.name?.split(' ')[1] || '',
+          email: currentUser.email || 'user@example.com',
+          phone: currentUser.phone || ''
+        });
+      } else {
+        // Redirect to auth if no valid user found
+        navigate('/auth');
+      }
     } else {
-      // Redirect to auth if no user found
+      // Remove invalid tokens and redirect to auth
+      removeTokens();
       navigate('/auth');
     }
   }, [navigate]);
 
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem('user');
+    // Remove JWT tokens and user data from localStorage
+    removeTokens();
     // Dispatch event for navbar update
     window.dispatchEvent(new CustomEvent('userStatusChanged'));
     navigate('/');
@@ -103,9 +111,12 @@ export default function Profile() {
               {user.name || 'User'}
             </div>
             
-            {/* User Email */}
+            {/* User Role & Phone */}
             <div className="absolute left-[20px] top-[297px] text-stone-500 text-sm font-normal font-['Inter'] leading-7">
-              {formData.email}
+              {user.role ? `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}` : 'Customer'}
+            </div>
+            <div className="absolute left-[20px] top-[315px] text-stone-500 text-xs font-normal font-['Inter'] leading-5">
+              {user.phone || formData.phone}
             </div>
             
             {/* Sidebar Menu Items */}

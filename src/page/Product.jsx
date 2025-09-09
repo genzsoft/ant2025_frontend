@@ -269,7 +269,7 @@ export default function Product() {
                 )}
               </div>
               
-              <div>
+              {/* <div>
                 <h3 className="font-semibold mb-4 text-zinc-800 text-sm">Volume</h3>
                 <div className="space-y-3">
                   {(showMore.volume ? volumeOptions : volumeOptions.slice(0, 4)).map((v) => (
@@ -290,9 +290,9 @@ export default function Product() {
                     </button>
                   </div>
                 )}
-              </div>
+              </div> */}
               
-              <div>
+              {/* <div>
                 <h3 className="font-semibold mb-4 text-zinc-800 text-sm">Size</h3>
                 <div className="space-y-3">
                   {(showMore.size ? sizeOptions : sizeOptions.slice(0, 4)).map((s) => (
@@ -313,9 +313,9 @@ export default function Product() {
                     </button>
                   </div>
                 )}
-              </div>
+              </div> */}
               
-              <div>
+              {/* <div>
                 <h3 className="font-semibold mb-4 text-zinc-800 text-sm">Rating</h3>
                 <div className="space-y-3">
                   {[5, 4, 3, 2, 1].map(r => (
@@ -325,7 +325,7 @@ export default function Product() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </div> */}
             </div>
 
             {/* Products */}

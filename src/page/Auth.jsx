@@ -1,15 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Api_Base_Url } from '../config/api.js';
+import { 
+  storeTokens, 
+  getUserRole, 
+  getUserId, 
+  isAuthenticated, 
+  getCurrentUser 
+} from '../utils/auth.js';
 
 export default function Auth() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('login'); // 'login' or 'signup'
-  const [authMethod, setAuthMethod] = useState('password'); // 'password' or 'otp'
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [signupStep, setSignupStep] = useState('form'); // 'form', 'otp', or 'referCode'
   const [otpTimer, setOtpTimer] = useState(0);
   const [user, setUser] = useState(null); // Store user data after successful registration
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     email: '',
     phone: '',
@@ -34,11 +42,147 @@ export default function Auth() {
 
   // Check for existing user on mount
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
+    const currentUser = getCurrentUser();
+    if (currentUser && isAuthenticated()) {
+      setUser(currentUser);
+    } else {
+      // Clear invalid stored data
+      localStorage.removeItem('user');
+      localStorage.removeItem('authTokens');
     }
   }, []);
+
+  // API Functions
+  const loginUser = async (username, password) => {
+    try {
+      const requestBody = {
+        username: username,
+        password: password
+      };
+      
+      console.log('Login Request:', requestBody);
+      
+      const response = await fetch('https://admin.ant2025.com/auth/jwt-login/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+      
+      console.log('Login Response Status:', response.status);
+      console.log('Login Response Data:', data);
+      
+      if (!response.ok) {
+        throw new Error(data.message || data.detail || 'Login failed');
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Login Error:', error);
+      throw new Error(error.message || 'Network error occurred');
+    }
+  };
+
+  const registerUser = async (phone, password) => {
+    try {
+      const requestBody = {
+        phone: phone,
+        password: password
+      };
+      
+      console.log('Registration Request:', requestBody);
+      
+      const response = await fetch(`${Api_Base_Url}/auth/registration/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+      
+      console.log('Registration Response Status:', response.status);
+      console.log('Registration Response Data:', data);
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Registration failed');
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Registration Error:', error);
+      throw new Error(error.message || 'Network error occurred');
+    }
+  };
+
+  const verifyOTP = async (phone, otp) => {
+    try {
+      const requestBody = {
+        mobile: phone,
+        otp: otp
+      };
+      
+      console.log('Verify OTP Request:', requestBody);
+      
+      const response = await fetch(`${Api_Base_Url}/auth/verify-otp/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+      
+      console.log('Verify OTP Response Status:', response.status);
+      console.log('Verify OTP Response Data:', data);
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'OTP verification failed');
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Verify OTP Error:', error);
+      throw new Error(error.message || 'Network error occurred');
+    }
+  };
+
+  const resendOTPAPI = async (phone) => {
+    try {
+      const requestBody = {
+        mobile: phone
+      };
+      
+      console.log('Resend OTP Request:', requestBody);
+      
+      const response = await fetch(`${Api_Base_Url}/auth/resend-otp/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+      
+      console.log('Resend OTP Response Status:', response.status);
+      console.log('Resend OTP Response Data:', data);
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to resend OTP');
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Resend OTP Error:', error);
+      throw new Error(error.message || 'Network error occurred');
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -48,38 +192,71 @@ export default function Auth() {
     }));
   };
 
-  const handleSignupSubmit = (e) => {
+  const handleSignupSubmit = async (e) => {
     e.preventDefault();
+    setError('');
     
     if (activeTab === 'signup' && signupStep === 'form') {
       // Validate signup form
-      if (!formData.phone || !formData.password || !formData.confirmPassword) {
-        alert('Please fill all required fields');
+      if (!formData.phone || !formData.password) {
+        setError('Please fill all required fields');
+        return;
+      }
+
+      // Validate phone number format (Bangladesh format: 01XXXXXXXXX)
+      const phoneRegex = /^01[3-9]\d{8}$/;
+      if (!phoneRegex.test(formData.phone)) {
+        setError('Please enter a valid phone number (01XXXXXXXXX)');
+        return;
+      }
+
+      // Validate password length
+      if (formData.password.length < 6) {
+        setError('Password must be at least 6 characters long');
         return;
       }
       
-      if (formData.password !== formData.confirmPassword) {
-        alert('Passwords do not match');
-        return;
+      try {
+        setLoading(true);
+        console.log('Starting registration with phone:', formData.phone);
+        const response = await registerUser(formData.phone, formData.password);
+        
+        console.log('Registration successful:', response);
+        setSignupStep('otp');
+        setOtpTimer(40);
+        setError('');
+        
+      } catch (error) {
+        console.error('Registration error:', error);
+        setError(error.message);
+      } finally {
+        setLoading(false);
       }
-      
-      // Simulate sending OTP
-      console.log('Sending OTP to:', formData.phone);
-      setSignupStep('otp');
-      setOtpTimer(40);
       
     } else if (activeTab === 'signup' && signupStep === 'otp') {
       // Validate and submit OTP
       if (!formData.otp || formData.otp.length !== 6) {
-        alert('Please enter valid 6-digit OTP');
+        setError('Please enter valid 6-digit OTP');
         return;
       }
       
-      // Simulate OTP verification
-      console.log('OTP verified successfully');
-      
-      // Move to refer code step
-      setSignupStep('referCode');
+      try {
+        setLoading(true);
+        console.log('Starting OTP verification with phone:', formData.phone, 'OTP:', formData.otp);
+        const response = await verifyOTP(formData.phone, formData.otp);
+        
+        console.log('OTP verified successfully:', response);
+        
+        // Move to refer code step
+        setSignupStep('referCode');
+        setError('');
+        
+      } catch (error) {
+        console.error('OTP verification error:', error);
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
       
     } else if (activeTab === 'signup' && signupStep === 'referCode') {
       // Complete registration (with or without refer code)
@@ -119,16 +296,98 @@ export default function Auth() {
     }
   };
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    console.log('Login submitted');
+    setError('');
+    
+    // Validate login form
+    if (!formData.phone || !formData.password) {
+      setError('Please fill all required fields');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log('Starting login with phone:', formData.phone);
+      
+      // Call login API
+      const response = await loginUser(formData.phone, formData.password);
+      
+      console.log('Login successful:', response);
+      
+      // Store tokens in localStorage
+      storeTokens({
+        access: response.access,
+        refresh: response.refresh
+      });
+      
+      // Extract user information from access token
+      const userId = getUserId(response.access);
+      const userRole = getUserRole(response.access);
+      
+      // Create user object
+      const userData = {
+        id: userId,
+        phone: formData.phone,
+        role: userRole,
+        isLoggedIn: true,
+        accessToken: response.access,
+        refreshToken: response.refresh
+      };
+      
+      // Store user data
+      setUser(userData);
+      localStorage.setItem('user', JSON.stringify(userData));
+      
+      // Dispatch custom event for navbar update
+      window.dispatchEvent(new CustomEvent('userStatusChanged'));
+      
+      console.log('User logged in successfully:', userData);
+      
+      // Reset form
+      setFormData({
+        email: '',
+        phone: '',
+        referCode: '',
+        password: '',
+        confirmPassword: '',
+        otp: ''
+      });
+      
+      // Redirect based on user role
+      if (userRole === 'shop_owner') {
+        navigate('/home2');
+      } else {
+        navigate('/');
+      }
+      
+    } catch (error) {
+      console.error('Login error:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleResendOTP = () => {
+  const handleResendOTP = async () => {
     if (otpTimer === 0) {
-      console.log('Resending OTP to:', formData.phone);
-      setOtpTimer(40);
-      setFormData(prev => ({ ...prev, otp: '' }));
+      try {
+        setLoading(true);
+        setError('');
+        console.log('Resending OTP for phone:', formData.phone);
+        
+        const response = await resendOTPAPI(formData.phone);
+        console.log('OTP resent successfully:', response);
+        
+        setOtpTimer(40);
+        setFormData(prev => ({ ...prev, otp: '' }));
+        
+      } catch (error) {
+        console.error('Resend OTP error:', error);
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -138,17 +397,21 @@ export default function Auth() {
     setFormData(prev => ({ ...prev, otp: '' }));
   };
 
-  // If user is logged in, redirect to home page
+  // If user is logged in, redirect to appropriate home page
   useEffect(() => {
     if (user) {
-      navigate('/');
+      if (user.role === 'shop_owner') {
+        navigate('/home2');
+      } else {
+        navigate('/');
+      }
     }
   }, [user, navigate]);
 
   return (
     <section className="min-h-[80vh] flex items-center justify-center p-4 md:p-6">
       <div className="w-full max-w-6xl">
-        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-8 lg:gap-16">
+        <div className="flex flex-col lg:flex-row lg:justify-center gap-8 lg:gap-16">
           {/* Left Side - Auth Form */}
           <div className="w-full lg:w-[578px] flex flex-col justify-start items-center gap-8 lg:gap-12">
             <div className="self-stretch flex flex-col justify-start items-start gap-8 lg:gap-11">
@@ -163,6 +426,7 @@ export default function Auth() {
                             setActiveTab('login');
                             setSignupStep('form');
                             setOtpTimer(0);
+                            setError('');
                           }}
                           className={`flex-1 px-4 md:px-6 py-3 flex justify-center items-center gap-2.5 overflow-hidden ${activeTab === 'login' ? 'bg-green-600' : 'bg-zinc-100'
                             }`}
@@ -178,6 +442,7 @@ export default function Auth() {
                             setActiveTab('signup');
                             setSignupStep('form');
                             setOtpTimer(0);
+                            setError('');
                           }}
                           className={`flex-1 px-4 md:px-6 py-3 flex justify-center items-center gap-2.5 overflow-hidden ${activeTab === 'signup' ? 'bg-green-600' : 'bg-zinc-100'
                             }`}
@@ -188,6 +453,13 @@ export default function Auth() {
                           </div>
                         </button>
                       </div>
+
+                      {/* Error Message */}
+                      {error && (
+                        <div className="self-stretch px-4 py-3 bg-red-50 border border-red-200 rounded">
+                          <div className="text-red-600 text-sm font-medium">{error}</div>
+                        </div>
+                      )}
 
                       {/* Login Form */}
                       {activeTab === 'login' && (
@@ -266,7 +538,7 @@ export default function Auth() {
                           </div>
 
                           {/* Confirm Password Field */}
-                          <div className="self-stretch px-4 md:px-6 py-3 bg-neutral-50 outline-1 outline-offset-[-1px] outline-stone-300 flex justify-between items-center overflow-hidden">
+                          {/* <div className="self-stretch px-4 md:px-6 py-3 bg-neutral-50 outline-1 outline-offset-[-1px] outline-stone-300 flex justify-between items-center overflow-hidden">
                             <input
                               type={showConfirmPassword ? 'text' : 'password'}
                               name="confirmPassword"
@@ -285,7 +557,7 @@ export default function Auth() {
                                 <path d="M15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15C13.6569 15 15 13.6569 15 12Z" stroke="#9A9A9A" strokeWidth="1.5" />
                               </svg>
                             </button>
-                          </div>
+                          </div> */}
                         </>
                       )}
 
@@ -334,9 +606,17 @@ export default function Auth() {
                             ) : (
                               <button
                                 onClick={handleResendOTP}
-                                className="text-sm text-green-600 hover:text-green-700 font-semibold underline"
+                                disabled={loading}
+                                className="text-sm text-green-600 hover:text-green-700 disabled:text-green-400 disabled:cursor-not-allowed font-semibold underline flex items-center justify-center gap-1"
                               >
-                                Resend OTP
+                                {loading ? (
+                                  <>
+                                    <div className="w-3 h-3 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+                                    Sending...
+                                  </>
+                                ) : (
+                                  'Resend OTP'
+                                )}
                               </button>
                             )}
                           </div>
@@ -440,20 +720,30 @@ export default function Auth() {
               {/* Submit Button */}
               <button 
                 onClick={activeTab === 'login' ? handleLoginSubmit : handleSignupSubmit}
-                className="self-stretch h-12 px-4 md:px-6 py-3 bg-green-600 hover:bg-green-700 inline-flex justify-center items-center gap-2.5 overflow-hidden transition-colors"
+                disabled={loading}
+                className="self-stretch h-12 px-4 md:px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed inline-flex justify-center items-center gap-2.5 overflow-hidden transition-colors"
               >
-                <div className="justify-start text-white text-sm md:text-base font-semibold font-['Inter'] leading-normal">
-                  {activeTab === 'login' 
-                    ? 'Log in' 
-                    : (signupStep === 'form' 
-                        ? 'Get OTP' 
-                        : (signupStep === 'otp' 
-                            ? 'Verify & Continue' 
-                            : 'Complete Registration'
-                          )
-                      )
-                  }
-                </div>
+                {loading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-white text-sm md:text-base font-semibold font-['Inter'] leading-normal">
+                      Please wait...
+                    </span>
+                  </div>
+                ) : (
+                  <div className="justify-start text-white text-sm md:text-base font-semibold font-['Inter'] leading-normal">
+                    {activeTab === 'login' 
+                      ? 'Log in' 
+                      : (signupStep === 'form' 
+                          ? 'Get OTP' 
+                          : (signupStep === 'otp' 
+                              ? 'Verify & Continue' 
+                              : 'Complete Registration'
+                            )
+                        )
+                    }
+                  </div>
+                )}
               </button>
             </div>
 
@@ -466,49 +756,7 @@ export default function Auth() {
             )}
           </div>
 
-          {/* Right Side - Benefits & QR Code */}
-          <div className="w-full lg:w-96 flex flex-col justify-start items-start gap-8 lg:gap-12 lg:flex-shrink-0">
-            <div className="flex flex-col justify-start items-start gap-4 lg:gap-5">
-              <div className="self-stretch inline-flex justify-start items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" className="flex-shrink-0">
-                  <path d="M18.3346 10.0001C18.3346 5.39771 14.6036 1.66675 10.0013 1.66675C5.39893 1.66675 1.66797 5.39771 1.66797 10.0001C1.66797 14.6024 5.39893 18.3334 10.0013 18.3334C14.6036 18.3334 18.3346 14.6024 18.3346 10.0001Z" fill="#0EBC3F" />
-                  <path d="M6.66797 10.4167L8.7513 12.5L13.3346 7.5" stroke="white" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                <div className="justify-start text-black text-sm font-semibold font-['Inter']">Delivering in 10000+ Cities</div>
-              </div>
-              <div className="inline-flex justify-start items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" className="flex-shrink-0">
-                  <path d="M18.3346 10.0001C18.3346 5.39771 14.6036 1.66675 10.0013 1.66675C5.39893 1.66675 1.66797 5.39771 1.66797 10.0001C1.66797 14.6024 5.39893 18.3334 10.0013 18.3334C14.6036 18.3334 18.3346 14.6024 18.3346 10.0001Z" fill="#0EBC3F" />
-                  <path d="M6.66797 10.4167L8.7513 12.5L13.3346 7.5" stroke="white" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                <div className="justify-start text-black text-sm font-semibold font-['Inter']">Presence in 6 Continents</div>
-              </div>
-              <div className="inline-flex justify-start items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" className="flex-shrink-0">
-                  <path d="M18.3346 10.0001C18.3346 5.39771 14.6036 1.66675 10.0013 1.66675C5.39893 1.66675 1.66797 5.39771 1.66797 10.0001C1.66797 14.6024 5.39893 18.3334 10.0013 18.3334C14.6036 18.3334 18.3346 14.6024 18.3346 10.0001Z" fill="#0EBC3F" />
-                  <path d="M6.66797 10.4167L8.7513 12.5L13.3346 7.5" stroke="white" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                <div className="justify-start text-black text-sm font-semibold font-['Inter']">100 Million Products</div>
-              </div>
-              <div className="inline-flex justify-start items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" className="flex-shrink-0">
-                  <path d="M18.3346 10.0001C18.3346 5.39771 14.6036 1.66675 10.0013 1.66675C5.39893 1.66675 1.66797 5.39771 1.66797 10.0001C1.66797 14.6024 5.39893 18.3334 10.0013 18.3334C14.6036 18.3334 18.3346 14.6024 18.3346 10.0001Z" fill="#0EBC3F" />
-                  <path d="M6.66797 10.4167L8.7513 12.5L13.3346 7.5" stroke="white" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                <div className="justify-start text-black text-sm font-semibold font-['Inter']">10 Million Happy Customers & Counting</div>
-              </div>
-            </div>
-            <div className="self-stretch flex flex-col sm:flex-row lg:flex-row justify-start items-center sm:items-start gap-4 sm:gap-7">
-              <img className="w-24 h-24 sm:w-32 sm:h-32 flex-shrink-0" src="https://placehold.co/123x122" alt="QR Code" />
-              <div className="flex-1 min-w-0 flex flex-col justify-start items-center sm:items-start gap-4 sm:gap-6 lg:gap-10">
-                <div className="w-full flex flex-col justify-start items-center sm:items-start gap-2">
-                  <div className="justify-start text-black text-base sm:text-lg font-bold font-['Inter'] text-center sm:text-left">DON'T HAVE ANT APP?</div>
-                  <div className="justify-start text-black text-sm font-medium font-['Inter'] text-center sm:text-left">Download it here!</div>
-                </div>
-                <div className="w-full justify-start text-black text-sm font-medium font-['Inter'] text-center sm:text-left">Scan the QR code</div>
-              </div>
-            </div>
-          </div>
+
         </div>
       </div>
     </section>

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
+import { getCurrentUser, isAuthenticated } from '../../utils/auth.js';
 
 function Navbar() {
   const [open, setOpen] = useState(false);
@@ -9,9 +10,10 @@ function Navbar() {
   // Check for user login status
   useEffect(() => {
     const checkUserStatus = () => {
-      const savedUser = localStorage.getItem('user');
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
+      // Check if user is authenticated with valid JWT token
+      if (isAuthenticated()) {
+        const currentUser = getCurrentUser();
+        setUser(currentUser);
       } else {
         setUser(null);
       }
@@ -32,14 +34,44 @@ function Navbar() {
     };
   }, []);
 
-  const navItems = [
-    { label: 'Home', to: '/' },
-    { label: 'Product', to: '/product' },
-    { label: 'Recharge', to: '/recharge' },
-    { label: 'Shops', to: '/shops' },
-    { label: 'About', to: '/about' },
-    { label: 'Contact', to: '/contact' },
-  ];
+  // Dynamic navigation items based on user role
+  const getNavItems = () => {
+    const baseItems = [
+      { label: 'About', to: '/about' },
+      { label: 'Contact', to: '/contact' },
+    ];
+
+    if (!user) {
+      // Guest/Not logged in users
+      return [
+        { label: 'Home', to: '/' },
+        { label: 'Product', to: '/product' },
+        { label: 'Shops', to: '/shops' },
+        ...baseItems
+      ];
+    }
+
+    if (user.role === 'shop_owner') {
+      // Shop owner navigation
+      return [
+        { label: 'Home', to: '/home2' },
+        { label: 'Product', to: '/product' },
+        { label: 'Recharge', to: '/recharge' },
+        { label: 'My Shop', to: '/myshop' },
+        ...baseItems
+      ];
+    }
+
+    // Customer navigation (default for logged-in customers)
+    return [
+      { label: 'Home', to: '/' },
+      { label: 'Product', to: '/product' },
+      { label: 'Shops', to: '/shops' },
+      ...baseItems
+    ];
+  };
+
+  const navItems = getNavItems();
 
   const baseLink = 'text-base font-semibold leading-tight transition-colors';
   const inactive = 'text-zinc-900 hover:text-green-600';
@@ -75,7 +107,7 @@ function Navbar() {
               <Link
                 to="/profile"
                 className="inline-flex items-center gap-2 whitespace-nowrap rounded-md p-1.5 hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600 transition-colors"
-                title={`Profile - ${user.name}`}
+                title={`Profile - ${user.name || user.phone || 'User'}`}
               >
                 <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
                   <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -144,7 +176,7 @@ function Navbar() {
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                     </svg>
-                    <span>Profile - {user.name}</span>
+                    <span>Profile - {user.name || user.phone || 'User'}</span>
                   </Link>
                 ) : (
                   // Login/Register for mobile

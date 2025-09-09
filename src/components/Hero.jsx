@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import ProductCard from './productCard.jsx';
+import { Api_Base_Url } from '../config/api.js';
 
 export default function Hero() {
   const slides = useMemo(
@@ -50,13 +51,23 @@ export default function Hero() {
   useEffect(() => {
     let mounted = true;
     axios
-      .get('/data.json')
+      .get(`${Api_Base_Url}/api/products/`)
       .then((res) => {
+        console.log('API Response:', res.data);
+        
         if (!mounted) return;
-        const list = Array.isArray(res.data?.products) ? res.data.products.slice(0, 5) : [];
+        // Handle direct array response or nested response
+        const list = Array.isArray(res.data) 
+          ? res.data.slice(0, 5) 
+          : Array.isArray(res.data?.products) 
+            ? res.data.products.slice(0, 5) 
+            : [];
         setProducts(list);
       })
-      .catch(() => setProducts([]));
+      .catch((error) => {
+        console.error('Error fetching products:', error);
+        setProducts([]);
+      });
     return () => {
       mounted = false;
     };
@@ -146,12 +157,9 @@ export default function Hero() {
             {products.map((p) => (
               <ProductCard 
                 key={p.id} 
-                imageSrc={p.image}
-                storeName="BD Store"
+                imageSrc={p.image || '/api/placeholder/300/300'}
                 name={p.name}
-                price={p.price}
-                originalPrice={p.price + 50}
-                inStock={true}
+                price={parseFloat(p.price) || 0}
                 to={`/product/${p.id}`}
                 compact
               />

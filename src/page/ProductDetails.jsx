@@ -1,40 +1,36 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
+import { Api_Base_Url } from '../config/api';
 
 export default function ProductDetails() {
     const [product, setProduct] = useState(null);
     const [selectedImage, setSelectedImage] = useState(0);
-    const [selectedSize, setSelectedSize] = useState('Big size');
-    const [selectedVolume, setSelectedVolume] = useState('800ml');
-    const [quantity, setQuantity] = useState(1);
+    const [_selectedSize, _setSelectedSize] = useState('Big size');
+    const [_selectedVolume, _setSelectedVolume] = useState('800ml');
+    const [_quantity, _setQuantity] = useState(1);
     const params = useParams();
 
-    // Mock product images for image navigation
-    const productImages = [
-        'https://placehold.co/151x348',
-        'https://placehold.co/32x74',
-        'https://placehold.co/32x74',
-        'https://placehold.co/32x74',
-        'https://placehold.co/32x74'
-    ];
+    // Images will come from API (product.images); keep a safe fallback
+    const productImages = Array.isArray(product?.images) && product.images.length
+        ? product.images
+        : (product?.image ? [product.image] : ['https://placehold.co/600x600']);
 
-    const sizeOptions = [
+    const _sizeOptions = [
         { name: 'Big size', price: 150 },
         { name: 'Medium size', price: 200 },
         { name: 'Small size', price: 250 }
     ];
 
-    const volumeOptions = ['1000ml', '800ml', '500ml', '250ml'];
+    const _volumeOptions = ['1000ml', '800ml', '500ml', '250ml'];
 
     useEffect(() => {
-        const idFromRoute = Number.parseInt(params.id, 10);
-        const targetId = Number.isFinite(idFromRoute) ? idFromRoute : 1;
-        axios.get('/data.json').then((res) => {
-            const list = res.data?.products || [];
-            const foundProduct = list.find((p) => p.id === targetId) || null;
-            setProduct(foundProduct);
-        });
+        const idFromRoute = params.id;
+        if (!idFromRoute) return;
+        axios
+            .get(`${Api_Base_Url}/api/products/${idFromRoute}/`)
+            .then((res) => setProduct(res.data))
+            .catch(() => setProduct(null));
     }, [params.id]);
 
     if (!product) {
@@ -46,12 +42,14 @@ export default function ProductDetails() {
     }
 
     const getCurrentPrice = () => {
-        const size = sizeOptions.find(s => s.name === selectedSize);
-        return size ? size.price : product.price;
+        if (!product) return 0;
+        const priceStr = product.retailer_price ?? product.mrp ?? product.price ?? 0;
+        const price = parseFloat(priceStr);
+        return Number.isFinite(price) ? price : 0;
     };
 
-    const handleQuantityChange = (delta) => {
-        setQuantity(prev => Math.max(1, prev + delta));
+    const _handleQuantityChange = (delta) => {
+        _setQuantity(prev => Math.max(1, prev + delta));
     };
 
     return (
@@ -65,10 +63,11 @@ export default function ProductDetails() {
                             {/* Main Image */}
                             <div className="relative border border-black rounded-lg overflow-hidden mb-4 bg-white">
                                 <div className="aspect-square flex items-center justify-center p-8">
-                                    <img 
-                                        src={selectedImage === 0 ? product.image : productImages[selectedImage]} 
-                                        alt={product.name}
+                                    <img
+                                        src={productImages[selectedImage] || productImages[0] || 'https://placehold.co/600x600'}
+                                        alt={product?.name || 'Product'}
                                         className="max-w-full max-h-full object-contain"
+                                        onError={(e) => { e.currentTarget.src = 'https://placehold.co/600x600'; }}
                                     />
                                 </div>
                                 {/* NEW badge */}
@@ -76,21 +75,21 @@ export default function ProductDetails() {
                                     NEW
                                 </div>
                             </div>
-                            
+
                             {/* Thumbnail Images */}
                             <div className="flex gap-2 overflow-x-auto">
                                 {productImages.map((img, index) => (
                                     <button
                                         key={index}
                                         onClick={() => setSelectedImage(index)}
-                                        className={`flex-shrink-0 w-16 h-16 md:w-20 md:h-20 border-2 rounded overflow-hidden ${
-                                            selectedImage === index ? 'border-green-600' : 'border-gray-300'
-                                        }`}
+                                        className={`flex-shrink-0 w-16 h-16 md:w-20 md:h-20 border-2 rounded overflow-hidden ${selectedImage === index ? 'border-green-600' : 'border-gray-300'
+                                            }`}
                                     >
-                                        <img 
-                                            src={index === 0 ? product.image : img} 
-                                            alt={`View ${index + 1}`} 
-                                            className="w-full h-full object-cover" 
+                                        <img
+                                            src={img}
+                                            alt={`View ${index + 1}`}
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => { e.currentTarget.src = 'https://placehold.co/80x80'; }}
                                         />
                                     </button>
                                 ))}
@@ -102,45 +101,69 @@ export default function ProductDetails() {
                             {/* Product Title & Brand */}
                             <div className="mb-4">
                                 <h1 className="text-xl md:text-2xl font-medium text-black mb-3">{product.name}</h1>
-                                
+
                                 {/* Brand */}
                                 <div className="mb-2">
-                                    <span className="text-black text-sm">Brand: <span className="text-green-600 font-medium">{product.brand}</span></span>
+                                    <span className="text-black text-sm">Brand: <span className="text-green-600 font-medium">{product?.brand || 'Unavailable'}</span></span>
                                 </div>
-                                
+
                                 {/* Category */}
                                 <div className="mb-2">
-                                    <span className="text-black text-sm">Category: <span className="text-green-600 font-medium">{product.category || 'Washing Liquid'}</span></span>
+                                    <span className="text-black text-sm">Category: <span className="text-green-600 font-medium">{product?.category || 'Unavailable'}</span></span>
                                 </div>
-                                
+
                                 {/* Stock Status */}
-                                <div className="mb-2">
-                                    <div className="flex items-center gap-1">
-                                        <div className="w-3 h-3 bg-green-600 rounded-full"></div>
-                                        <span className="text-xs text-black">In stock</span>
-                                    </div>
-                                </div>
-                                
+                                {/* <div className="flex items-center gap-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 512 512"
+                      className="w-4 h-4 flex-shrink-0"
+                      aria-hidden="true"
+                    >
+                      <g>
+                        <path fill="#eab14d" d="M250.775 196.73H101.909V13.251a5.558 5.558 0 0 1 5.558-5.558h137.75a5.558 5.558 0 0 1 5.558 5.558z"></path>
+                        <path fill="#e49542" d="M233.562 7.693V196.73h17.214V13.251a5.558 5.558 0 0 0-5.558-5.558z"></path>
+                        <path fill="#df6b57" d="M185.754 50.521H166.93a4.476 4.476 0 0 1-4.476-4.476V7.693h27.777v38.353a4.477 4.477 0 0 1-4.477 4.475z"></path>
+                        <path fill="#f1cb86" d="M421.689 360.519H193.556V126.73h222.575a5.558 5.558 0 0 1 5.558 5.558z"></path>
+                        <path fill="#ecbe6b" d="M404.476 126.73v233.789h17.214v-228.23a5.558 5.558 0 0 0-5.558-5.558h-11.656z"></path>
+                        <path fill="#365e7d" d="M317.035 169.558H298.21a4.476 4.476 0 0 1-4.476-4.476V126.73h27.777v38.353a4.476 4.476 0 0 1-4.476 4.475z"></path>
+                        <path fill="#eab14d" d="M276.366 504.308H7.5V326.077a5.558 5.558 0 0 1 5.558-5.558h263.308z"></path>
+                        <path fill="#e49542" d="M259.153 320.519h17.214v183.789h-17.214z"></path>
+                        <path fill="#365e7d" d="M151.345 363.347H132.52a4.476 4.476 0 0 1-4.476-4.476v-38.353h27.777v38.353a4.476 4.476 0 0 1-4.476 4.476z"></path>
+                        <path fill="#eab14d" d="M504.5 504.308H276.366V360.519h222.575a5.558 5.558 0 0 1 5.558 5.558v138.231z"></path>
+                        <path fill="#e49542" d="M487.286 360.519v143.789H504.5v-138.23a5.558 5.558 0 0 0-5.558-5.558h-11.656z"></path>
+                        <path fill="#df6b57" d="M399.845 403.347H381.02a4.476 4.476 0 0 1-4.476-4.476v-38.353h27.777v38.353a4.476 4.476 0 0 1-4.476 4.476z"></path>
+                        <path fill="#f1cb86" d="M193.556 320.519H44.69v-118.23a5.558 5.558 0 0 1 5.558-5.558h143.308z"></path>
+                        <path fill="#ecbe6b" d="M176.342 196.73h17.214v123.789h-17.214z"></path>
+                        <path fill="#df6b57" d="M128.535 239.558H109.71a4.476 4.476 0 0 1-4.476-4.476V196.73h27.777v38.353a4.476 4.476 0 0 1-4.476 4.475z"></path>
+                        <path d="M498.942 353.018H429.19V238.274c0-4.143-3.357-7.5-7.5-7.5s-7.5 3.357-7.5 7.5v114.744H283.867v-32.5c0-4.143-3.357-7.5-7.5-7.5h-75.311V134.229h85.179v30.854c0 6.604 5.372 11.976 11.976 11.976h18.824c6.604 0 11.977-5.372 11.977-11.976v-30.854h85.179v74.059c0 4.143 3.357 7.5 7.5 7.5s7.5-3.357 7.5-7.5v-76c0-7.2-5.858-13.059-13.059-13.059H258.277V13.251c0-7.2-5.858-13.059-13.059-13.059h-137.75c-7.201 0-13.059 5.858-13.059 13.059v47.416c0 4.143 3.358 7.5 7.5 7.5s7.5-3.357 7.5-7.5V15.192h45.545v30.854c0 6.604 5.372 11.976 11.976 11.976h18.825c6.604 0 11.976-5.372 11.976-11.976V15.192h45.545v104.037h-49.719a7.5 7.5 0 0 0-7.5 7.5v62.5H109.41V90.653c0-4.143-3.358-7.5-7.5-7.5s-7.5 3.357-7.5 7.5v98.577H50.248c-7.201 0-13.059 5.857-13.059 13.058v110.73H13.058c-7.2 0-13.058 5.858-13.058 13.059v178.23a7.5 7.5 0 0 0 7.5 7.5h79.416c4.142 0 7.5-3.357 7.5-7.5s-3.358-7.5-7.5-7.5H15V328.018h105.545v30.853c0 6.604 5.373 11.977 11.976 11.977h18.824c6.604 0 11.976-5.373 11.976-11.977v-30.853h105.545v168.789H116.902c-4.142 0-7.5 3.357-7.5 7.5s3.358 7.5 7.5 7.5h387.597c4.143 0 7.5-3.357 7.5-7.5v-138.23c.001-7.2-5.857-13.059-13.057-13.059zM182.73 43.021h-12.776V15.193h12.776zm131.281 91.208v27.829h-12.776v-27.829zM112.734 204.23h12.777v27.828h-12.777zm-60.545 0h45.545v30.853c0 6.604 5.373 11.976 11.976 11.976h18.825c6.604 0 11.976-5.372 11.976-11.976V204.23h45.545v108.788H52.189zm96.132 151.617h-12.776v-27.829h12.776zm248.501 12.171v27.829h-12.777v-27.829zM497 496.807H283.867V368.018h85.178v30.853c0 6.604 5.373 11.977 11.977 11.977h18.824c6.604 0 11.977-5.373 11.977-11.977v-30.853h85.178v128.789z" fill="#000000"></path>
+                      </g>
+                    </svg>
+                    <span className="text-l text-black">
+                      {product?.stock && product?.stock !== '0' ? 'In stock' : 'Out of stock'}
+                    </span>
+                  </div> */}
+
                                 {/* Shipping Info */}
-                                <div className="mb-2">
+                                {/* <div className="mb-2">
                                     <div className="flex items-center gap-2">
                                         <svg className="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 20 20">
                                             <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
                                         </svg>
                                         <span className="text-sm">Ships from <span className="font-bold">{product.shippedFrom}</span></span>
                                     </div>
-                                </div>
+                                </div> */}
 
                                 {/* Badges */}
-                                <div className="flex flex-wrap gap-2 mt-3">
+                                {/* <div className="flex flex-wrap gap-2 mt-3">
                                     <span className="bg-green-100 text-green-600 text-xs px-3 py-1 rounded-md uppercase">free shipping</span>
                                     <span className="bg-red-100 text-red-600 text-xs px-3 py-1 rounded-md uppercase">free gift</span>
-                                </div>
+                                </div> */}
                             </div>
 
                             {/* Size Selection */}
-                            <div className="mb-6 border-t border-b border-stone-300 py-4">
-                                <div className="mb-4">
+                            {/* <div className="mb-6 border-t border-b  py-4"> */}
+                            {/* <div className="mb-4">
                                     <span className="text-sm font-bold text-black uppercase">Size: </span>
                                     <span className="text-sm text-stone-500">{selectedSize}</span>
                                 </div>
@@ -162,10 +185,10 @@ export default function ProductDetails() {
                                             </div>
                                         </button>
                                     ))}
-                                </div>
+                                </div> */}
 
-                                {/* Volume Selection */}
-                                <div className="mt-6">
+                            {/* Volume Selection */}
+                            {/* <div className="mt-6">
                                     <span className="text-sm font-bold text-black uppercase">Volume: </span>
                                     <span className="text-sm text-stone-500">{selectedVolume}</span>
                                     <div className="flex flex-wrap gap-2 mt-2">
@@ -183,58 +206,89 @@ export default function ProductDetails() {
                                             </button>
                                         ))}
                                     </div>
+                                </div> */}
+                            {/* </div> */}
+                            <div className="space-y-4">
+                                {/* Price */}
+                                <div>
+                                    <div className="text-xl font-extrabold text-zinc-800">BDT {getCurrentPrice().toLocaleString('en-US')} TK</div>
                                 </div>
+
+                                {/* Quantity */}
+                                {/* <div className="flex items-center gap-2">
+                                    <span className="text-sm font-semibold text-zinc-800">QTY:</span>
+                                    <div className="flex items-center border border-neutral-400 rounded">
+                                        <button
+                                            onClick={() => handleQuantityChange(-1)}
+                                            className="w-8 h-8 flex items-center justify-center hover:bg-gray-100"
+                                        >
+                                            <span className="text-lg font-bold">−</span>
+                                        </button>
+                                        <span className="px-3 py-1 text-sm font-medium text-zinc-800">{quantity}</span>
+                                        <button
+                                            onClick={() => handleQuantityChange(1)}
+                                            className="w-8 h-8 flex items-center justify-center hover:bg-gray-100"
+                                        >
+                                            <span className="text-lg font-bold">+</span>
+                                        </button>
+                                    </div>
+                                </div> */}
+
+                                {/* Action Buttons */}
+                                <div className="space-y-3">
+
+                                    <button className="w-full py-3 bg-green-600 text-white text-sm font-bold rounded hover:bg-green-700">
+                                        BUY NOW
+                                    </button>
+
+                                    <button className="w-full py-3 bg-zinc-800 text-white text-sm font-bold rounded hover:bg-zinc-900">
+                                        VIEW IN STORE
+                                    </button>
+                                </div>
+
+                                {/* Description */}
+                                {product?.description && (
+                                    <div className="mt-6">
+                                        <div 
+                                            className="[&_table]:border-collapse [&_table]:w-full [&_td]:border [&_td]:border-gray-400 [&_td]:p-2 [&_th]:border [&_th]:border-gray-400 [&_th]:p-2 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-4 [&_p]:mb-2"
+                                            dangerouslySetInnerHTML={{ __html: product.description }} 
+                                        />
+                                    </div>
+                                )}
+
+
+                                {/* Security & Logistics */}
+                                {/* <div className="space-y-4 pt-4 border-t">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-semibold text-stone-500">Secured transaction</span>
+                                        <div className="w-4 h-4 text-green-700">✓</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-sm font-semibold text-zinc-800 mb-2">Our Top Logistics Partners</div>
+                                        <div className="flex gap-3">
+                                            <div className="w-14 h-8 border border-black rounded"></div>
+                                            <div className="w-14 h-8 border border-black rounded"></div>
+                                        </div>
+                                    </div>
+                                    <div className="text-sm font-semibold text-green-700">Fastest cross-border delivery</div>
+                                </div> */}
                             </div>
 
-                            {/* Social Icons */}
-                            <div className="flex gap-3 mb-4">
-                                {/* Facebook */}
-                                <button className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors">
-                                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                                    </svg>
-                                </button>
-                                
-                                {/* Twitter */}
-                                <button className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center hover:bg-sky-600 transition-colors">
-                                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
-                                    </svg>
-                                </button>
-                                
-                                {/* Instagram */}
-                                <button className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center hover:from-purple-600 hover:to-pink-600 transition-colors">
-                                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 6.62 5.367 11.987 11.988 11.987 6.62 0 11.987-5.367 11.987-11.987C24.014 5.367 18.637.001 12.017.001zM8.449 16.988c-1.297 0-2.448-.396-3.44-1.103-.99-.708-1.764-1.684-2.321-2.929-.558-1.245-.837-2.582-.837-4.012 0-1.43.279-2.767.837-4.012.557-1.245 1.331-2.221 2.321-2.929.992-.707 2.143-1.103 3.44-1.103 1.297 0 2.448.396 3.44 1.103.99.708 1.764 1.684 2.321 2.929.558 1.245.837 2.582.837 4.012 0 1.43-.279 2.767-.837 4.012-.557 1.245-1.331 2.221-2.321 2.929-.992.707-2.143 1.103-3.44 1.103zm7.138-9.071v-.715c0-.25.09-.464.27-.642.18-.179.395-.268.645-.268h1.29c.25 0 .464.089.642.268.179.178.268.392.268.642v.715c0 .25-.089.464-.268.642-.178.179-.392.268-.642.268h-1.29c-.25 0-.464-.089-.645-.268-.18-.178-.27-.392-.27-.642zm0 5.976c0-.857.214-1.664.642-2.42.428-.756 1.01-1.35 1.745-1.781.735-.431 1.537-.647 2.406-.647.869 0 1.671.216 2.406.647.735.431 1.317 1.025 1.745 1.781.428.756.642 1.563.642 2.42 0 .857-.214 1.664-.642 2.42-.428.756-1.01 1.35-1.745 1.781-.735.431-1.537.647-2.406.647-.869 0-1.671-.216-2.406-.647-.735-.431-1.317-1.025-1.745-1.781-.428-.756-.642-1.563-.642-2.42z"/>
-                                    </svg>
-                                </button>
-                                
-                                {/* LinkedIn */}
-                                <button className="w-10 h-10 bg-blue-700 rounded-full flex items-center justify-center hover:bg-blue-800 transition-colors">
-                                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                                    </svg>
-                                </button>
-                                
-                                {/* YouTube */}
-                                <button className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-colors">
-                                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                                    </svg>
-                                </button>
-                            </div>
+
                         </div>
 
                         {/* Purchase Section */}
+                        {/* 
+                        
                         <div className="w-full lg:w-80 bg-slate-100 p-6">
                             <div className="space-y-4">
-                                {/* Price */}
+                               
                                 <div>
                                     <div className="text-xl font-extrabold text-zinc-800">BDT {getCurrentPrice()} TK</div>
                                     <div className="text-xs text-green-700 font-semibold">Order now and get it around Saturday, August 30</div>
                                 </div>
 
-                                {/* Quantity */}
+                             
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm font-semibold text-zinc-800">QTY:</span>
                                     <div className="flex items-center border border-neutral-400 rounded">
@@ -254,7 +308,7 @@ export default function ProductDetails() {
                                     </div>
                                 </div>
 
-                                {/* Action Buttons */}
+                          
                                 <div className="space-y-3">
                                     <button className="w-full py-3 bg-green-600 text-white text-sm font-bold rounded hover:bg-green-700">
                                         BUY NOW
@@ -268,11 +322,11 @@ export default function ProductDetails() {
                                     </button>
                                     <div className="text-sm font-bold text-black">If you want to know more about the product</div>
                                     <button className="w-full py-3 bg-zinc-800 text-white text-sm font-bold rounded hover:bg-zinc-900">
-                                        CONTACT US
+                                        VIEW IN STORE
                                     </button>
                                 </div>
 
-                                {/* Security & Logistics */}
+                       
                                 <div className="space-y-4 pt-4 border-t">
                                     <div className="flex items-center gap-2">
                                         <span className="text-sm font-semibold text-stone-500">Secured transaction</span>
@@ -289,6 +343,9 @@ export default function ProductDetails() {
                                 </div>
                             </div>
                         </div>
+ */}
+
+
                     </div>
                 </div>
 
