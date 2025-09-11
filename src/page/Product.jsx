@@ -48,6 +48,8 @@ export default function Product() {
       .then(res => {
         if (!mounted) return;
         const list = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.results) ? res.data.results : []);
+        console.log('API Response:', res.data);
+        
         // Normalize price to number
         const normalized = list.map(p => ({
           ...p,

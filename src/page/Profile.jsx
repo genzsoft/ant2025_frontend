@@ -1,75 +1,402 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { toast } from 'react-toastify';
 import { getCurrentUser, isAuthenticated, removeTokens } from '../utils/auth.js';
+import { Api_Base_Url } from '../config/api.js';
 
 export default function Profile() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(null);           // Auth info (id, role, tokens)
+  const [profile, setProfile] = useState(null);     // Fetched profile data from /auth/user/
+  const [originalProfile, setOriginalProfile] = useState(null); // For diffing on save
   const [activeSection, setActiveSection] = useState('account');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    name: '',
     email: '',
-    phone: ''
+    phone: '', // read-only
+    reference_phone: '',
+    division: '',
+    district: '',
+    upazila: ''
   });
+  const [divisions, setDivisions] = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [upazilas, setUpazilas] = useState([]);
+  const [loadingDivisions, setLoadingDivisions] = useState(false);
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
+  const [loadingUpazilas, setLoadingUpazilas] = useState(false);
+  const [selectedDivisionId, setSelectedDivisionId] = useState('');
+  const [selectedDistrictId, setSelectedDistrictId] = useState('');
+  const [selectedUpazilaId, setSelectedUpazilaId] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = React.useRef(null);
   const navigate = useNavigate();
 
+  // Trade transactions state & logic
+  const [tradeTx, setTradeTx] = useState([]);
+  const [tradeLoading, setTradeLoading] = useState(false);
+  const [tradeError, setTradeError] = useState('');
+  const [tradePage, setTradePage] = useState(1);
+  const [tradeNext, setTradeNext] = useState(null);
+  const [tradeCount, setTradeCount] = useState(0);
+
+  const fetchTradeTransactions = useCallback(async ({ reset=false } = {}) => {
+    if (!user?.accessToken) return;
+    try {
+      setTradeError('');
+      setTradeLoading(true);
+      const url = `${Api_Base_Url}/api/trade-transactions/?page=${tradePage}`;
+      const res = await axios.get(url, { headers: { 'Authorization': `Bearer ${user.accessToken}`, 'Accept': 'application/json' } });
+  const { results = [], next = null, /* previous unused */ count = 0 } = res.data || {};
+      setTradeCount(count);
+      setTradeNext(next);
+      setTradeTx(prev => reset ? results : [...prev, ...results]);
+    } catch (err) {
+      console.error('[Profile.jsx] Failed to fetch trade transactions', err);
+      setTradeError('Failed to load trade transactions');
+    } finally {
+      setTradeLoading(false);
+    }
+  }, [user?.accessToken, tradePage]);
+
   useEffect(() => {
-    // Check if user is authenticated with valid JWT token
-    if (isAuthenticated()) {
-      const currentUser = getCurrentUser();
-      if (currentUser) {
-        setUser(currentUser);
-        // Initialize form data with user data
-        setFormData({
-          firstName: currentUser.name?.split(' ')[0] || 'User',
-          lastName: currentUser.name?.split(' ')[1] || '',
-          email: currentUser.email || 'user@example.com',
-          phone: currentUser.phone || ''
-        });
-      } else {
-        // Redirect to auth if no valid user found
-        navigate('/auth');
+    if (activeSection === 'transactions') {
+      fetchTradeTransactions({ reset: tradePage === 1 });
+    }
+  }, [activeSection, tradePage, fetchTradeTransactions]);
+
+  const handleLoadMoreTrade = () => { if (tradeNext && !tradeLoading) setTradePage(p => p + 1); };
+  const handleRefreshTrade = () => { setTradePage(1); setTradeTx([]); fetchTradeTransactions({ reset: true }); };
+
+  // Fetch profile from backend
+
+  const fetchProfile = useCallback(async (accessToken) => {
+    try {
+      setError('');
+      const response = await axios.get(`${Api_Base_Url}/auth/user/`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/json'
+        }
+      });
+      console.log('[Profile.jsx] Fetched profile:', response.data);
+      setProfile(response.data);
+      setOriginalProfile(response.data);
+      // Initialize form state
+      setFormData({
+        name: response.data.name || '',
+        email: response.data.email || '',
+        phone: response.data.phone || '',
+        reference_phone: response.data.reference_phone || response.data.referred_by_phone || response.data.referred_by_name || '',
+        division: response.data.division || '',
+        district: response.data.district || '',
+        upazila: response.data.upazila || ''
+      });
+    // Location preselection now handled by chained effects once lists load
+      localStorage.setItem('userProfile', JSON.stringify(response.data));
+    } catch (err) {
+      console.error('[Profile.jsx] Error fetching profile:', err);
+      setError('Failed to load profile. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fetch divisions
+  const fetchDivisions = useCallback(async () => {
+    try {
+      setLoadingDivisions(true);
+      const res = await axios.get(`${Api_Base_Url}/api/locations/divisions/`);
+      setDivisions(res.data || []);
+    } catch (err) {
+      console.error('[Profile.jsx] Failed to load divisions', err);
+      toast.error('Failed to load divisions');
+    } finally {
+      setLoadingDivisions(false);
+    }
+  }, []);
+
+  // Fetch districts for division id
+  const fetchDistricts = useCallback(async (divisionId, preselectName) => {
+    if (!divisionId) { setDistricts([]); setSelectedDistrictId(''); return; }
+    try {
+      setLoadingDistricts(true);
+      const res = await axios.get(`${Api_Base_Url}/api/locations/divisions/${divisionId}/districts/`);
+      setDistricts(res.data || []);
+      if (preselectName) {
+        const match = (res.data || []).find(d => d.name === preselectName);
+        if (match) {
+          setSelectedDistrictId(match.id.toString());
+          setFormData(prev => ({ ...prev, district: match.name }));
+    // Upazila preselect deferred to effect
+        }
       }
-    } else {
-      // Remove invalid tokens and redirect to auth
+    } catch (err) {
+      console.error('[Profile.jsx] Failed to load districts', err);
+      toast.error('Failed to load districts');
+    } finally {
+      setLoadingDistricts(false);
+    }
+  }, []);
+
+  // Fetch upazilas for district id
+  const fetchUpazilas = useCallback(async (districtId, preselectName) => {
+    if (!districtId) { setUpazilas([]); setSelectedUpazilaId(''); return; }
+    try {
+      setLoadingUpazilas(true);
+      const res = await axios.get(`${Api_Base_Url}/api/locations/districts/${districtId}/upazilas/`);
+      setUpazilas(res.data || []);
+      if (preselectName) {
+        const match = (res.data || []).find(u => u.name === preselectName);
+        if (match) {
+          setSelectedUpazilaId(match.id.toString());
+          setFormData(prev => ({ ...prev, upazila: match.name }));
+        }
+      }
+    } catch (err) {
+      console.error('[Profile.jsx] Failed to load upazilas', err);
+      toast.error('Failed to load upazilas');
+    } finally {
+      setLoadingUpazilas(false);
+    }
+  }, []);
+
+  // Preselect division after both profile and divisions load (first render or refetch)
+  useEffect(() => {
+    if (!profile?.division || !divisions.length) return;
+    if (selectedDivisionId) return; // already selected (user changed or preselected)
+    const divisionMatch = divisions.find(d => d.name === profile.division);
+    if (divisionMatch) {
+      setSelectedDivisionId(divisionMatch.id.toString());
+      setFormData(prev => ({ ...prev, division: divisionMatch.name }));
+      // Fetch districts with intention to preselect
+      fetchDistricts(divisionMatch.id, profile.district);
+    }
+  }, [profile, divisions, selectedDivisionId, fetchDistricts]);
+
+  // Preselect district after districts load
+  useEffect(() => {
+    if (!profile?.district || !districts.length) return;
+    if (selectedDistrictId) return;
+    const distMatch = districts.find(d => d.name === profile.district);
+    if (distMatch) {
+      setSelectedDistrictId(distMatch.id.toString());
+      setFormData(prev => ({ ...prev, district: distMatch.name }));
+      fetchUpazilas(distMatch.id, profile.upazila);
+    }
+  }, [profile, districts, selectedDistrictId, fetchUpazilas]);
+
+  // Preselect upazila after upazilas load
+  useEffect(() => {
+    if (!profile?.upazila || !upazilas.length) return;
+    if (selectedUpazilaId) return;
+    const upMatch = upazilas.find(u => u.name === profile.upazila);
+    if (upMatch) {
+      setSelectedUpazilaId(upMatch.id.toString());
+      setFormData(prev => ({ ...prev, upazila: upMatch.name }));
+    }
+  }, [profile, upazilas, selectedUpazilaId]);
+
+  // Initial divisions load
+  useEffect(() => {
+    fetchDivisions();
+  }, [fetchDivisions]);
+
+  // When division changes manually by user
+  useEffect(() => {
+    if (selectedDivisionId) {
+      const divObj = divisions.find(d => d.id.toString() === selectedDivisionId);
+      setFormData(prev => ({ ...prev, division: divObj ? divObj.name : '' , district: '', upazila: ''}));
+      setSelectedDistrictId('');
+      setSelectedUpazilaId('');
+      setDistricts([]);
+      setUpazilas([]);
+      fetchDistricts(selectedDivisionId);
+    }
+  }, [selectedDivisionId, divisions, fetchDistricts]);
+
+  // When district changes manually by user
+  useEffect(() => {
+    if (selectedDistrictId) {
+      const distObj = districts.find(d => d.id.toString() === selectedDistrictId);
+      setFormData(prev => ({ ...prev, district: distObj ? distObj.name : '', upazila: '' }));
+      setSelectedUpazilaId('');
+      setUpazilas([]);
+      fetchUpazilas(selectedDistrictId);
+    }
+  }, [selectedDistrictId, districts, fetchUpazilas]);
+
+  // When upazila changes manually
+  useEffect(() => {
+    if (selectedUpazilaId) {
+      const upObj = upazilas.find(u => u.id.toString() === selectedUpazilaId);
+      setFormData(prev => ({ ...prev, upazila: upObj ? upObj.name : '' }));
+    }
+  }, [selectedUpazilaId, upazilas]);
+
+  useEffect(() => {
+    if (!isAuthenticated()) {
       removeTokens();
       navigate('/auth');
+      return;
     }
-  }, [navigate]);
+    const authUser = getCurrentUser();
+    if (!authUser) {
+      removeTokens();
+      navigate('/auth');
+      return;
+    }
+    setUser(authUser);
+    // Try cached profile first for quick paint
+    const cached = localStorage.getItem('userProfile');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        setProfile(parsed);
+        setOriginalProfile(parsed);
+        setFormData(prev => ({
+          ...prev,
+            name: parsed.name || '',
+            email: parsed.email || '',
+            phone: parsed.phone || '',
+            reference_phone: parsed.reference_phone || parsed.referred_by_phone || '',
+            division: parsed.division || '',
+            district: parsed.district || '',
+            upazila: parsed.upazila || ''
+        }));
+        setLoading(false); // show cached immediately
+  } catch { /* ignore */ }
+    }
+    // Always fetch fresh
+    fetchProfile(authUser.accessToken);
+  }, [navigate, fetchProfile]);
 
   const handleLogout = () => {
     setUser(null);
-    // Remove JWT tokens and user data from localStorage
     removeTokens();
-    // Dispatch event for navbar update
     window.dispatchEvent(new CustomEvent('userStatusChanged'));
     navigate('/');
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    // Prevent editing phone directly (read-only)
+    if (name === 'phone') return;
+    // Prevent editing reference_phone if already set originally
+    if (name === 'reference_phone' && (originalProfile?.reference_phone || originalProfile?.referred_by_phone)) {
+      return;
+    }
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = () => {
-    // Update user data in localStorage
-    const updatedUser = {
-      ...user,
-      name: `${formData.firstName} ${formData.lastName}`.trim(),
-      email: formData.email,
-      phone: formData.phone
-    };
-    
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    setUser(updatedUser);
-    
-    // Dispatch event for navbar update
-    window.dispatchEvent(new CustomEvent('userStatusChanged'));
-    
-    alert('Profile updated successfully!');
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setImagePreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      // Determine changed fields (allowed patchable)
+      const patchable = ['name', 'email', 'reference_phone', 'division', 'district', 'upazila'];
+      const payload = {};
+      patchable.forEach(field => {
+        const originalVal = originalProfile?.[field] || '';
+        const newVal = formData[field] || '';
+        // Only include if changed and not empty OR changed from value to empty explicitly
+        if (newVal !== originalVal) {
+          // Enforce one-time reference_phone update
+          if (field === 'reference_phone' && (originalProfile?.reference_phone || originalProfile?.referred_by_phone)) {
+            return; // skip if already set
+          }
+          if (field === 'reference_phone' && newVal.trim() === '') return; // don't send empty refer code
+          payload[field] = newVal;
+        }
+      });
+
+      const hasImage = !!imageFile;
+      if (Object.keys(payload).length === 0 && !hasImage) {
+        toast.info('No changes to update');
+        setSaving(false);
+        return;
+      }
+
+      let response;
+      if (hasImage) {
+        // Attempt multipart PATCH (backend may reject if user_img read-only)
+        const form = new FormData();
+        Object.entries(payload).forEach(([k,v]) => form.append(k, v));
+        form.append('user_img', imageFile);
+        setUploadingImage(true);
+        try {
+          response = await axios.patch(`${Api_Base_Url}/auth/user/`, form, {
+            headers: {
+              'Authorization': `Bearer ${user.accessToken}`,
+              'Content-Type': 'multipart/form-data'
+            }
+          });
+        } catch (imgErr) {
+          console.warn('[Profile.jsx] Image upload failed, retrying without image', imgErr);
+          toast.warning('Image not updated (read-only). Saving other changes.');
+          // Fallback to json without image
+          if (Object.keys(payload).length === 0) throw imgErr; // nothing else to save
+          response = await axios.patch(`${Api_Base_Url}/auth/user/`, payload, {
+            headers: {
+              'Authorization': `Bearer ${user.accessToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        } finally {
+          setUploadingImage(false);
+        }
+      } else {
+        console.log('[Profile.jsx] PATCH payload:', payload);
+        response = await axios.patch(`${Api_Base_Url}/auth/user/`, payload, {
+          headers: {
+            'Authorization': `Bearer ${user.accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+
+      toast.success('Profile updated');
+      setProfile(response.data);
+      setOriginalProfile(response.data);
+      localStorage.setItem('userProfile', JSON.stringify(response.data));
+      // Merge auth user display info if name/email changed
+      if (payload.name || payload.email) {
+        const updatedAuthUser = { ...user };
+        if (payload.name) updatedAuthUser.name = payload.name;
+        if (payload.email) updatedAuthUser.email = payload.email;
+        setUser(updatedAuthUser);
+        window.dispatchEvent(new CustomEvent('userStatusChanged'));
+      }
+    } catch (err) {
+      console.error('[Profile.jsx] PATCH error:', err);
+      let message = 'Update failed';
+      if (err.response?.data) {
+        if (typeof err.response.data === 'string') message = err.response.data;
+        else if (err.response.data.detail) message = err.response.data.detail;
+        else message = Object.entries(err.response.data).map(([k,v]) => `${k}: ${Array.isArray(v)? v.join(', '): v}`).join('\n');
+      }
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const sidebarItems = [
@@ -79,7 +406,7 @@ export default function Profile() {
     { id: 'password', label: 'Change password', icon: '🔒' }
   ];
 
-  if (!user) {
+  if (loading) {
     return (
       <section className="min-h-[80vh] flex items-center justify-center p-4 md:p-6">
         <div className="text-center">
@@ -90,112 +417,117 @@ export default function Profile() {
     );
   }
 
+  if (error && !profile) {
+    return (
+      <section className="min-h-[80vh] flex items-center justify-center p-4 md:p-6">
+        <div className="text-center max-w-md">
+          <p className="text-red-600 mb-4">{error}</p>
+          <button
+            onClick={() => { if (user) fetchProfile(user.accessToken); }}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+          >Retry</button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="min-h-[80vh] py-8 px-4 md:px-6 bg-stone-100">
       <div className="max-w-[1360px] mx-auto">
         <div className="bg-stone-100 rounded-[10px] p-8 min-h-[863px] relative">
           
-          {/* Sidebar */}
-          <div className="w-64 h-[619px] absolute left-[30px]  bg-neutral-50 rounded-[10px]">
-            {/* Profile Image */}
-            <div className="w-52 h-56 absolute left-[20px] top-[20px] rounded-[10px] overflow-hidden">
-              <img 
-                className="w-52 h-56 object-cover" 
-                src="https://placehold.co/214x220" 
-                alt="Profile" 
-              />
-            </div>
-            
-            {/* User Name */}
-            <div className="absolute left-[20px] top-[265px] text-black text-xl font-bold font-['Inter'] leading-normal">
-              {user.name || 'User'}
-            </div>
-            
-            {/* User Role & Phone */}
-            <div className="absolute left-[20px] top-[297px] text-stone-500 text-sm font-normal font-['Inter'] leading-7">
-              {user.role ? `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}` : 'Customer'}
-            </div>
-            <div className="absolute left-[20px] top-[315px] text-stone-500 text-xs font-normal font-['Inter'] leading-5">
-              {user.phone || formData.phone}
-            </div>
-            
-            {/* Sidebar Menu Items */}
-            {sidebarItems.map((item, index) => (
-              <div 
-                key={item.id}
-                className={`w-52 h-12 absolute left-[20px] rounded-lg cursor-pointer transition-colors ${
-                  activeSection === item.id ? 'bg-green-600' : 'bg-white'
-                }`}
-                style={{ top: `${355 + (index * 61)}px` }}
-                onClick={() => setActiveSection(item.id)}
-              >
-                <div className={`absolute left-[15px] top-[15px] text-sm font-normal font-['Inter'] leading-tight ${
-                  activeSection === item.id ? 'text-white' : 'text-black'
-                }`}>
-                  {item.label}
-                </div>
-                <div className={`w-3 h-3.5 absolute left-[187.25px] top-[18.50px] text-sm font-black ${
-                  activeSection === item.id ? 'text-white' : 'text-black'
-                }`}>
-                  ›
-                </div>
+          {/* Sidebar revamped */}
+          <div className="w-72 min-h-[640px] absolute left-[30px] top-[20px] bg-neutral-50 rounded-xl p-5 flex flex-col">
+            <div className="relative group mb-4">
+              <div className="w-full aspect-[214/220] bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center border border-gray-200">
+                <img
+                  className="w-full h-full object-cover"
+                  src={imagePreview || profile?.user_img || 'https://placehold.co/214x220'}
+                  alt="Profile"
+                  onError={(e) => { e.target.src = 'https://placehold.co/214x220'; }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-sm font-medium transition-opacity"
+                  disabled={uploadingImage}
+                >
+                  {uploadingImage ? 'Uploading...' : 'Change Photo'}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageSelect}
+                />
               </div>
-            ))}
+              {imageFile && (
+                <p className="text-xs text-green-600 mt-1">New image selected (will save on update)</p>
+              )}
+            </div>
+            <div className="mb-1 text-black text-lg font-bold leading-tight truncate">{profile?.name || 'User'}</div>
+            <div className="text-stone-500 text-sm mb-1">{user?.role ? `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}` : 'Customer'}</div>
+            <div className="text-stone-500 text-xs mb-4">{profile?.phone || formData.phone}</div>
+            <div className="flex flex-col gap-1 mt-2 flex-1">
+              {sidebarItems.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveSection(item.id)}
+                  className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition flex items-center justify-between ${activeSection === item.id ? 'bg-green-600 text-white shadow' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+                >
+                  <span>{item.label}</span>
+                  <span className="text-xs">›</span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-6">
+              <button
+                onClick={handleLogout}
+                className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013 3v1" /></svg>
+                Logout
+              </button>
+            </div>
           </div>
 
           {/* Main Content Area */}
-          <div className="ml-[362px] mt-[20px]">
+          <div className="ml-[350px] mt-[20px] pr-6">
             {activeSection === 'account' && (
               <>
                 {/* Page Title */}
-                <div className="text-black text-2xl font-bold font-['Inter'] capitalize leading-7 mb-12">
-                  Account info
+                <div className="flex items-start justify-between mb-10">
+                  <div className="text-black text-2xl font-bold font-['Inter'] capitalize leading-7">Account info</div>
+                  <div className="bg-white border border-green-100 shadow-sm rounded-xl px-5 py-3 flex flex-col items-start min-w-[170px] relative overflow-hidden">
+                    <span className="text-xs uppercase tracking-wide text-gray-500 mb-1">Balance</span>
+                    <div className="text-2xl font-bold text-green-600 flex items-center gap-1">৳{profile?.balance || '0.00'}</div>
+                  </div>
                 </div>
 
-                {/* First Name and Last Name Row */}
-                <div className="flex gap-8 mb-8">
-                  {/* First Name */}
-                  <div className="flex-1">
-                    <div className="mb-4">
-                      <span className="text-black text-sm font-normal font-['Inter'] leading-tight">First Name </span>
-                      <span className="text-red-600 text-sm font-normal font-['Inter'] leading-tight">*</span>
-                    </div>
-                    <div className="w-full h-11 bg-white rounded-md border border-stone-300">
-                      <input
-                        type="text"
-                        name="firstName"
-                        value={formData.firstName}
-                        onChange={handleInputChange}
-                        className="w-full h-full px-3 bg-transparent text-neutral-800 text-sm font-normal font-['Inter'] leading-tight focus:outline-none rounded-md"
-                        placeholder="First Name"
-                      />
-                    </div>
+                {/* Name */}
+                <div className="mb-8">
+                  <div className="mb-4">
+                    <span className="text-black text-sm font-normal font-['Inter'] leading-tight">Full Name </span>
                   </div>
-
-                  {/* Last Name */}
-                  <div className="flex-1">
-                    <div className="mb-4">
-                      <span className="text-black text-sm font-normal font-['Inter'] leading-tight">Last Name </span>
-                      <span className="text-red-600 text-sm font-normal font-['Inter'] leading-tight">*</span>
-                    </div>
-                    <div className="w-full h-11 bg-white rounded-md border border-stone-300">
-                      <input
-                        type="text"
-                        name="lastName"
-                        value={formData.lastName}
-                        onChange={handleInputChange}
-                        className="w-full h-full px-3 bg-transparent text-neutral-800 text-sm font-normal font-['Inter'] leading-tight focus:outline-none rounded-md"
-                        placeholder="Last Name"
-                      />
-                    </div>
+                  <div className="w-full h-11 bg-white rounded-md border border-stone-300">
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      className="w-full h-full px-3 bg-transparent text-neutral-800 text-sm font-normal font-['Inter'] leading-tight focus:outline-none rounded-md"
+                      placeholder="Your name"
+                    />
                   </div>
                 </div>
 
                 {/* Email Address */}
                 <div className="mb-8">
-                  <div className="mb-4">
-                    <span className="text-black text-sm font-normal font-['Inter'] leading-tight">Email Address </span>
-                    <span className="text-red-600 text-sm font-normal font-['Inter'] leading-tight">*</span>
+                  <div className="mb-1 flex items-center justify-between">
+                    <div>
+                      <span className="text-black text-sm font-normal font-['Inter'] leading-tight">Email Address </span>
+                    </div>
                   </div>
                   <div className="w-full h-11 bg-white rounded-md border border-stone-300">
                     <input
@@ -209,29 +541,112 @@ export default function Profile() {
                   </div>
                 </div>
 
-                {/* Phone Number */}
-                <div className="mb-12">
-                  <div className="mb-4">
-                    <span className="text-black text-sm font-normal font-['Inter'] leading-tight">Phone Number </span>
-                    <span className="text-stone-500 text-sm font-normal font-['Inter'] leading-tight">(Optional)</span>
+                {/* Phone (read-only) */}
+                <div className="mb-8">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-black text-sm font-normal font-['Inter'] leading-tight">Phone Number</span>
+                    <span className="text-xs text-red-500">You can't update this</span>
                   </div>
-                  <div className="w-full h-11 bg-white rounded-md border border-stone-300">
+                  <div className="w-full h-11 bg-gray-50 rounded-md border border-stone-300">
                     <input
                       type="tel"
                       name="phone"
                       value={formData.phone}
-                      onChange={handleInputChange}
-                      className="w-full h-full px-3 bg-transparent text-neutral-800 text-sm font-normal font-['Inter'] leading-tight focus:outline-none rounded-md"
+                      disabled
+                      className="w-full h-full px-3 bg-transparent text-neutral-500 text-sm font-normal font-['Inter'] leading-tight focus:outline-none rounded-md cursor-not-allowed"
                       placeholder="Phone Number"
                     />
                   </div>
                 </div>
 
-                {/* Save Button */}
-                <div className="w-32 h-12 bg-green-600 rounded-[10px] cursor-pointer" onClick={handleSave}>
-                  <div className="w-full h-full flex items-center justify-center text-white text-xs font-medium font-['Inter'] uppercase leading-none">
-                    save
+                {/* Reference Code (one-time) */}
+                <div className="mb-8">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-black text-sm font-normal font-['Inter'] leading-tight">Reference Phone</span>
+                    { (originalProfile?.reference_phone || originalProfile?.referred_by_phone) ? (
+                      <span className="text-xs text-green-600">Set (locked)</span>
+                    ) : (
+                      <span className="text-xs text-orange-600">Can be set only once</span>
+                    ) }
                   </div>
+                  <div className={`w-full h-11 rounded-md border ${ (originalProfile?.reference_phone || originalProfile?.referred_by_phone) ? 'bg-gray-50 border-stone-300' : 'bg-white border-stone-300' }`}>
+                    <input
+                      type="text"
+                      name="reference_phone"
+                      value={formData.reference_phone}
+                      onChange={handleInputChange}
+                      disabled={Boolean(originalProfile?.reference_phone || originalProfile?.referred_by_phone)}
+                      className={`w-full h-full px-3 bg-transparent text-sm font-normal font-['Inter'] leading-tight focus:outline-none rounded-md ${(originalProfile?.reference_phone || originalProfile?.referred_by_phone) ? 'text-neutral-500 cursor-not-allowed' : 'text-neutral-800'}`}
+                      placeholder="Enter referral phone"
+                    />
+                  </div>
+                </div>
+
+                {/* Location Fields with dynamic selects */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                  {/* Division */}
+                  <div className="flex flex-col">
+                    <label className="mb-1 text-black text-sm font-normal">Division</label>
+                    <select
+                      value={selectedDivisionId}
+                      onChange={(e) => setSelectedDivisionId(e.target.value)}
+                      className="w-full h-11 px-3 bg-white rounded-md border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100"
+                    >
+                      <option value="">Select Division</option>
+                      {loadingDivisions && <option value="" disabled>Loading...</option>}
+                      {divisions.map(d => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* District */}
+                  <div className="flex flex-col">
+                    <label className="mb-1 text-black text-sm font-normal">District</label>
+                    <select
+                      value={selectedDistrictId}
+                      onChange={(e) => setSelectedDistrictId(e.target.value)}
+                      disabled={!selectedDivisionId || loadingDistricts}
+                      className="w-full h-11 px-3 bg-white rounded-md border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100"
+                    >
+                      <option value="">{loadingDistricts ? 'Loading...' : 'Select District'}</option>
+                      {districts.map(d => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* Upazila */}
+                  <div className="flex flex-col">
+                    <label className="mb-1 text-black text-sm font-normal">Upazila</label>
+                    <select
+                      value={selectedUpazilaId}
+                      onChange={(e) => setSelectedUpazilaId(e.target.value)}
+                      disabled={!selectedDistrictId || loadingUpazilas}
+                      className="w-full h-11 px-3 bg-white rounded-md border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100"
+                    >
+                      <option value="">{loadingUpazilas ? 'Loading...' : 'Select Upazila'}</option>
+                      {upazilas.map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <div className="flex items-center gap-4">
+                  <button
+                    disabled={saving}
+                    onClick={handleSave}
+                    className={`w-44 h-12 rounded-[10px] flex items-center justify-center text-white text-xs font-semibold font-['Inter'] uppercase leading-none transition ${saving ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 cursor-pointer'}`}
+                  >
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  {imageFile && (
+                    <button
+                      type="button"
+                      onClick={() => { setImageFile(null); setImagePreview(null); }}
+                      className="text-xs text-red-600 hover:underline"
+                    >Remove new image</button>
+                  )}
                 </div>
               </>
             )}
@@ -399,6 +814,70 @@ export default function Profile() {
                 <div className="text-black text-2xl font-bold font-['Inter'] capitalize leading-7 mb-8">
                   My Transaction
                 </div>
+                {/* Trade Transactions Dynamic List */}
+                <div className="mb-10">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      <span className="inline-block px-3 py-1 rounded-full bg-green-600 text-white text-xs font-medium">Trade</span>
+                      <span className="text-gray-500 font-normal">Transactions</span>
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <button onClick={handleRefreshTrade} className="text-xs px-3 py-1 rounded bg-white border border-gray-200 hover:bg-gray-50">Refresh</button>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    {tradeError && (
+                      <div className="p-3 rounded bg-red-50 text-red-600 text-sm flex items-start justify-between">
+                        <span>{tradeError}</span>
+                        <button onClick={handleRefreshTrade} className="underline ml-2">Retry</button>
+                      </div>
+                    )}
+                    {!tradeError && (
+                      <div className="text-xs text-gray-500">Total: {tradeCount}</div>
+                    )}
+                    {tradeTx.map((tx, idx) => {
+                      const productName = tx.product_display?.split('|')?.[0]?.trim() || tx.product_display;
+                      return (
+                        <div key={idx} className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 flex flex-col gap-2 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-gray-800">{productName}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 uppercase tracking-wide">{tx.type || 'Trade'}</span>
+                          </div>
+                          <div className="text-gray-500 text-xs leading-snug">{tx.product_display}</div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                            <span>Qty: <strong className="text-gray-800">{tx.quantity}</strong></span>
+                            <span>Total: <strong className="text-gray-800">৳{tx.total_amount}</strong></span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-500">
+                            {tx.buyer_number && <span>Buyer: {tx.buyer_number}</span>}
+                            {tx.seller_number && <span>Seller: {tx.seller_number}</span>}
+                          </div>
+                          <div className="text-[11px] text-gray-400 flex items-center justify-between">
+                            <span>{tx.created_at}</span>
+                            {tx.shop_display && <span className="truncate max-w-[50%] text-right">{tx.shop_display}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {!tradeLoading && tradeTx.length === 0 && !tradeError && (
+                      <div className="text-center py-10 text-sm text-gray-500 bg-white rounded-lg border border-dashed">No trade transactions found.</div>
+                    )}
+                    {tradeLoading && (
+                      <div className="space-y-3">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <div key={i} className="animate-pulse bg-white border border-gray-100 rounded-lg p-4 space-y-2">
+                            <div className="h-4 bg-gray-200 rounded w-1/2" />
+                            <div className="h-3 bg-gray-100 rounded w-5/6" />
+                            <div className="h-3 bg-gray-100 rounded w-2/3" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {tradeNext && !tradeLoading && (
+                      <button onClick={handleLoadMoreTrade} className="w-full mt-2 py-2 text-sm font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50">Load More</button>
+                    )}
+                  </div>
+                </div>
                 
                 {/* Transaction Table */}
                 <div className="bg-white rounded-lg overflow-hidden shadow-sm">
@@ -494,18 +973,7 @@ export default function Profile() {
             )}
           </div>
 
-          {/* Logout Button (positioned at bottom) */}
-          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
-            <button
-              onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013 3v1" />
-              </svg>
-              Logout
-            </button>
-          </div>
+          {/* Legacy absolute logout removed (moved into sidebar) */}
         </div>
       </div>
     </section>

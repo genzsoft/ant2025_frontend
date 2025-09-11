@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { getStoredShopData, getCurrentUser } from '../utils/auth.js';
 import axios from 'axios';
-import { Api_Base_Url } from '../config/api.js';
+import { Api_Base_Url } from '../config/api';
 
 function Myshop() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -12,11 +12,9 @@ function Myshop() {
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState('');
-  const [pagination, setPagination] = useState({
-    count: 0,
-    next: null,
-    previous: null
-  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [hasNextPage, setHasNextPage] = useState(false);
   const navigate = useNavigate();
 
   const fetchShopData = async (accessToken) => {
@@ -47,58 +45,64 @@ function Myshop() {
     }
   };
 
-  const fetchShopProducts = async (shopId, url = null) => {
-    setProductsLoading(true);
-    setProductsError('');
-
+  const fetchShopProducts = async (shopId, page = 1) => {
     try {
-      console.log('🛒 [Myshop.jsx] Fetching shop products for shop ID:', shopId);
+      setProductsLoading(true);
+      setProductsError('');
       
-      const currentUser = getCurrentUser();
-      if (!currentUser?.accessToken) {
-        throw new Error('Authentication required');
-      }
+      console.log('🛍️ [Myshop.jsx] Fetching shop products for shop ID:', shopId, 'page:', page);
+      
+      // Try to filter by shop ID in the API call (same as ShopDetails.jsx)
+      const response = await axios.get(`${Api_Base_Url}/api/shop-products/?shop=${shopId}&page=${page}`);
+      console.log('🛍️ [Myshop.jsx] Shop products response:', response.data);
 
-      const apiUrl = url || `${Api_Base_Url}/api/shop-products/?shop=${shopId}`;
-      console.log('🌐 [Myshop.jsx] API URL:', apiUrl);
-
-      const response = await axios.get(apiUrl, {
-        headers: {
-          'Authorization': `Bearer ${currentUser.accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      console.log('📦 [Myshop.jsx] Products Response:', response.data);
-
-      if (response.data) {
-        // Handle paginated response
-        if (response.data.results) {
-          setProducts(response.data.results);
-          setPagination({
-            count: response.data.count || 0,
-            next: response.data.next || null,
-            previous: response.data.previous || null
-          });
-        } else {
-          // Handle direct array response
-          setProducts(Array.isArray(response.data) ? response.data : []);
-          setPagination({
-            count: Array.isArray(response.data) ? response.data.length : 0,
-            next: null,
-            previous: null
-          });
-        }
+      // Handle paginated response structure (same logic as ShopDetails.jsx)
+      let shopProducts = [];
+      if (response.data && response.data.results) {
+        // Paginated response
+        shopProducts = response.data.results;
+        setTotalProducts(response.data.count || 0);
+        setHasNextPage(!!response.data.next);
+      } else if (Array.isArray(response.data)) {
+        // Direct array response
+        shopProducts = response.data;
+        setTotalProducts(response.data.length);
+        setHasNextPage(false);
       } else {
-        setProducts([]);
-        setPagination({ count: 0, next: null, previous: null });
+        shopProducts = [];
+        setTotalProducts(0);
+        setHasNextPage(false);
       }
 
+      // If API doesn't support shop filtering or no products found, filter client-side
+      if (!shopProducts || shopProducts.length === 0) {
+        console.log('🛍️ [Myshop.jsx] No products found with shop filter, trying fallback...');
+        const allProductsResponse = await axios.get(`${Api_Base_Url}/api/shop-products/`);
+        let allProducts = [];
+        
+        if (allProductsResponse.data && allProductsResponse.data.results) {
+          allProducts = allProductsResponse.data.results;
+        } else if (Array.isArray(allProductsResponse.data)) {
+          allProducts = allProductsResponse.data;
+        }
+        
+        // Filter by shop ID client-side
+        shopProducts = allProducts.filter(product => 
+          product.shop === parseInt(shopId) || product.shop_id === parseInt(shopId)
+        );
+        setTotalProducts(shopProducts.length);
+        setHasNextPage(false);
+      }
+
+      setProducts(shopProducts);
+      console.log('🛍️ [Myshop.jsx] Final products set:', shopProducts);
+      
     } catch (error) {
-      console.error('💥 [Myshop.jsx] Error fetching shop products:', error);
-      setProductsError('Failed to load products. Please try again.');
+      console.error('🛍️ [Myshop.jsx] Error fetching shop products:', error);
+      setProductsError('Failed to load products');
       setProducts([]);
-      setPagination({ count: 0, next: null, previous: null });
+      setTotalProducts(0);
+      setHasNextPage(false);
     } finally {
       setProductsLoading(false);
     }
@@ -154,12 +158,12 @@ function Myshop() {
     loadShopData();
   }, [navigate]);
 
-  // Effect to fetch products when products tab is accessed
+  // Load products when products tab is active
   useEffect(() => {
-    if (activeTab === 'products' && shopData?.id && !productsLoading && products.length === 0) {
-      fetchShopProducts(shopData.id);
+    if (activeTab === 'products' && shopData?.id) {
+      fetchShopProducts(shopData.id, currentPage);
     }
-  }, [activeTab, shopData, productsLoading, products.length]);
+  }, [activeTab, shopData?.id, currentPage]);
 
   if (loading) {
     return (
@@ -433,162 +437,133 @@ function Myshop() {
           {activeTab === 'products' && (
             <div>
               <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">My Shop Products</h2>
-                  <p className="text-gray-600 text-sm">
-                    Total: {pagination.count} products
-                  </p>
-                </div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  Products ({totalProducts})
+                </h2>
                 <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors">
                   Add New Product
                 </button>
               </div>
 
-              {/* Products Loading State */}
-              {productsLoading && (
+              {productsLoading ? (
                 <div className="text-center py-12">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
                   <p className="text-gray-600">Loading products...</p>
                 </div>
-              )}
-
-              {/* Products Error State */}
-              {productsError && !productsLoading && (
+              ) : productsError ? (
                 <div className="text-center py-12">
                   <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
                     <svg className="w-12 h-12 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <h3 className="text-lg font-semibold text-red-800 mb-2">Failed to Load Products</h3>
+                    <h3 className="text-lg font-semibold text-red-800 mb-2">Error Loading Products</h3>
                     <p className="text-red-600 mb-4">{productsError}</p>
                     <button 
-                      onClick={() => shopData?.id && fetchShopProducts(shopData.id)}
+                      onClick={() => fetchShopProducts(shopData?.id, currentPage)}
                       className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                     >
                       Try Again
                     </button>
                   </div>
                 </div>
-              )}
-
-              {/* Products List */}
-              {!productsLoading && !productsError && (
-                <>
-                  {products.length === 0 ? (
-                    <div className="text-center py-12">
-                      <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4-8-4m16 0v10l-8 4-8-4V7" />
-                      </svg>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No Products Found</h3>
-                      <p className="text-gray-600 mb-4">You haven't added any products to your shop yet.</p>
-                      <button className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-semibold transition-colors">
-                        Add Your First Product
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Products Grid */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6">
-                        {products.map((product) => (
-                          <div key={product.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                            <div className="aspect-square bg-gray-100 overflow-hidden">
-                              {product.image ? (
-                                <img
-                                  src={product.image}
-                                  alt={product.name}
-                                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                                  onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    e.target.nextSibling.style.display = 'flex';
-                                  }}
-                                />
-                              ) : null}
-                              <div 
-                                className={`w-full h-full flex items-center justify-center bg-gray-100 ${product.image ? 'hidden' : 'flex'}`}
-                              >
-                                <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                              </div>
-                            </div>
-                            
-                            <div className="p-4">
-                              <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">
-                                {product.name || 'Unnamed Product'}
-                              </h3>
-                              
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-lg font-bold text-green-600">
-                                  ৳{product.price || '0'}
-                                </span>
-                                {product.stock_quantity !== undefined && (
-                                  <span className={`text-sm px-2 py-1 rounded ${
-                                    product.stock_quantity > 0 
-                                      ? 'bg-green-100 text-green-800' 
-                                      : 'bg-red-100 text-red-800'
-                                  }`}>
-                                    Stock: {product.stock_quantity}
-                                  </span>
-                                )}
-                              </div>
-
-                              {product.description && (
-                                <p className="text-gray-600 text-sm mb-3 line-clamp-2">
-                                  {product.description}
-                                </p>
-                              )}
-
-                              <div className="flex space-x-2">
-                                <Link
-                                  to={`/shop-products/${product.id}`}
-                                  className="flex-1 bg-green-600 hover:bg-green-700 text-white text-center py-2 px-3 rounded text-sm font-medium transition-colors"
-                                >
-                                  View Details
-                                </Link>
-                                <button className="px-3 py-2 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                                  Edit
-                                </button>
-                              </div>
-                            </div>
+              ) : products.length === 0 ? (
+                <div className="text-center py-12">
+                  <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4-8-4m16 0v10l-8 4-8-4V7" />
+                  </svg>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Products Found</h3>
+                  <p className="text-gray-600 mb-6">You haven't added any products to your shop yet.</p>
+                  <button className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
+                    Add Your First Product
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  {/* Products Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+                    {products.map((product) => (
+                      <div key={product.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
+                        <div className="aspect-w-1 aspect-h-1 w-full h-48 bg-gray-200">
+                          {product.image ? (
+                            <img
+                              src={product.image}
+                              alt={product.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                e.target.nextSibling.style.display = 'flex';
+                              }}
+                            />
+                          ) : null}
+                          <div className={`w-full h-full bg-gray-200 flex items-center justify-center ${product.image ? 'hidden' : 'flex'}`}>
+                            <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
                           </div>
-                        ))}
-                      </div>
-
-                      {/* Pagination */}
-                      {(pagination.next || pagination.previous) && (
-                        <div className="flex justify-center items-center space-x-4 mt-8">
-                          <button
-                            onClick={() => pagination.previous && fetchShopProducts(shopData.id, pagination.previous)}
-                            disabled={!pagination.previous}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                              pagination.previous
-                                ? 'bg-green-600 text-white hover:bg-green-700'
-                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            }`}
-                          >
-                            Previous
-                          </button>
-                          
-                          <span className="text-gray-600">
-                            Showing {products.length} of {pagination.count} products
-                          </span>
-                          
-                          <button
-                            onClick={() => pagination.next && fetchShopProducts(shopData.id, pagination.next)}
-                            disabled={!pagination.next}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                              pagination.next
-                                ? 'bg-green-600 text-white hover:bg-green-700'
-                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            }`}
-                          >
-                            Next
-                          </button>
                         </div>
-                      )}
-                    </>
+                        <div className="p-4">
+                          <h3 className="font-semibold text-gray-900 text-sm mb-2 line-clamp-2">
+                            {product.name}
+                          </h3>
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-lg font-bold text-green-600">
+                              ৳{product.price}
+                            </span>
+                            <span className="text-sm text-gray-500">
+                              Stock: {product.stock || 0}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+                            <span>ID: #{product.id}</span>
+                            <span className={`px-2 py-1 rounded-full text-xs ${
+                              product.stock > 0 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {product.stock > 0 ? 'In Stock' : 'Out of Stock'}
+                            </span>
+                          </div>
+                          <div className="flex space-x-2">
+                            <button 
+                              onClick={() => navigate(`/shop-products/${product.id}`)}
+                              className="w-full bg-blue-50 text-blue-600 px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors"
+                            >
+                              View Details
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  {totalProducts > 0 && (
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-gray-700">
+                        Showing {((currentPage - 1) * 12) + 1} to {Math.min(currentPage * 12, totalProducts)} of {totalProducts} products
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                          disabled={currentPage === 1}
+                          className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Previous
+                        </button>
+                        <span className="px-3 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded-lg">
+                          Page {currentPage}
+                        </span>
+                        <button
+                          onClick={() => setCurrentPage(prev => prev + 1)}
+                          disabled={!hasNextPage}
+                          className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
                   )}
-                </>
+                </div>
               )}
             </div>
           )}
