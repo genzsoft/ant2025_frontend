@@ -1,7 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Api_Base_Url } from '../config/api';
+import { isAuthenticated, getStoredTokens } from '../utils/auth';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 export default function ShopProductDetails() {
   const { id } = useParams();
@@ -12,6 +15,18 @@ export default function ShopProductDetails() {
   const [selectedSize, _setSelectedSize] = useState('Big size');
   const [_selectedVolume, _setSelectedVolume] = useState('800ml');
   const [quantity, setQuantity] = useState(1);
+  const [orderLoading, setOrderLoading] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState(false);
+  const [orderMessage, setOrderMessage] = useState('');
+  const navigate = useNavigate();
+  // Hold-to-confirm state (borrowed pattern from Recharge)
+  const [showHold, setShowHold] = useState(false);
+  const [holdProgress, setHoldProgress] = useState(0); // 0-100
+  const holdTimerRef = React.useRef(null);
+  const holdStartRef = React.useRef(null);
+  const HOLD_DURATION = 2000; // ms to complete hold
+  const PROGRESS_RADIUS = 54;
+  const CIRCUMFERENCE = 2 * Math.PI * PROGRESS_RADIUS;
 
   // Mock data for missing fields
   const sizeOptions = [
@@ -73,6 +88,145 @@ export default function ShopProductDetails() {
     return ['/api/placeholder/600/600'];
   };
 
+  const resolveShopId = () => {
+    // Different possible shapes
+    if (!product) return null;
+    if (product.shop) return product.shop; // numeric id or string
+    if (product.shop_id) return product.shop_id;
+    if (product.shop?.id) return product.shop.id;
+    return null;
+  };
+
+  const resolveProductId = () => {
+    if (!product) return null;
+    if (product.product?.id) return product.product.id;
+    if (product.id) return product.id;
+    return null;
+  };
+
+  const handleBuyNow = async () => {
+    if (!product?.stock || product?.stock === '0') return; // guard
+    // Auth check
+    if (!isAuthenticated()) {
+      navigate('/auth', { replace: true, state: { from: `/shop-product/${id}` } });
+      return;
+    }
+
+    const shop_id = resolveShopId();
+    const product_id = resolveProductId();
+    if (!shop_id || !product_id) {
+      setOrderSuccess(false);
+      setOrderMessage('Missing shop or product information.');
+      return;
+    }
+
+    const payload = { shop_id, product_id, quantity };
+    try {
+      setOrderLoading(true);
+      setOrderMessage('');
+      setOrderSuccess(false);
+      const tokens = getStoredTokens();
+      const access = tokens?.access;
+      const res = await axios.post(`${Api_Base_Url}/api/place-order/`, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(access ? { Authorization: `Bearer ${access}` } : {})
+        }
+      });
+      console.log('Order placed:', res.data);
+      setOrderSuccess(true);
+      setOrderMessage('Order placed successfully.');
+      toast.success('Order placed successfully');
+      // Optional: reset quantity
+      // setQuantity(1);
+    } catch (err) {
+      console.error('Order placement failed:', err);
+      let msg = 'Failed to place order.';
+      if (err.response?.data) {
+        if (typeof err.response.data === 'string') msg = err.response.data;
+        else if (err.response.data.detail) msg = err.response.data.detail;
+        else msg = JSON.stringify(err.response.data);
+      }
+      setOrderSuccess(false);
+      setOrderMessage(msg);
+      // Attempt to parse JSON error shape like {"error":"Insufficient balance..."}
+      try {
+        if (typeof msg === 'string') {
+          let parsed = null;
+          if (msg.startsWith('{') && msg.endsWith('}')) {
+            parsed = JSON.parse(msg);
+          }
+          if (parsed && parsed.error) {
+            toast.error(parsed.error);
+          } else if (err.response?.data?.error) {
+            toast.error(err.response.data.error);
+          } else {
+            toast.error(msg);
+          }
+        } else {
+          toast.error('Order failed');
+        }
+      } catch {
+        toast.error(msg);
+      }
+    } finally {
+      setOrderLoading(false);
+    }
+  };
+
+  // Open hold overlay instead of placing order immediately
+  const openHoldOverlay = () => {
+    if (!product?.stock || product?.stock === '0') return;
+    // Auth check first
+    if (!isAuthenticated()) {
+      navigate('/auth', { replace: true, state: { from: `/shop-product/${id}` } });
+      return;
+    }
+    // Reset progress
+    if (holdTimerRef.current) {
+      clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    setHoldProgress(0);
+    setShowHold(true);
+  };
+
+  // Start holding (mouse/touch down)
+  const startHold = () => {
+    if (orderLoading) return;
+    holdStartRef.current = performance.now();
+    if (holdTimerRef.current) {
+      clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    holdTimerRef.current = setInterval(() => {
+      const now = performance.now();
+      const elapsed = now - (holdStartRef.current || now);
+      const p = Math.min(100, Math.round((elapsed / HOLD_DURATION) * 100));
+      setHoldProgress(p);
+      if (p >= 100) {
+        // Complete
+        clearInterval(holdTimerRef.current);
+        holdTimerRef.current = null;
+        setTimeout(() => {
+          setShowHold(false);
+          handleBuyNow();
+        }, 120);
+      }
+    }, 30);
+  };
+
+  const cancelHold = () => {
+    if (holdTimerRef.current) {
+      clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    setHoldProgress(0);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => () => { if (holdTimerRef.current) clearInterval(holdTimerRef.current); }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex justify-center items-center">
@@ -119,11 +273,7 @@ export default function ShopProductDetails() {
     if (Number.isNaN(num)) return n ?? '';
     return num.toLocaleString('en-US');
   };
-  const productData = product?.product || product;
   const currentPrice = Number(getCurrentPrice());
-  const mrp = productData?.mrp ? Number(productData.mrp) : null;
-  const comparePrice = mrp && currentPrice && mrp > currentPrice ? mrp : null;
-  const percentOff = comparePrice ? Math.round(((comparePrice - currentPrice) / comparePrice) * 100) : 0;
 
   return (
     <section className="py-4 md:py-8 px-4 md:px-6 bg-gray-50">
@@ -370,14 +520,24 @@ export default function ShopProductDetails() {
                 {/* Action Buttons */}
                 <div className="grid grid-cols-1 sm:grid-cols-1 gap-3">
                   <button
-                    disabled={!product?.stock || product?.stock === '0'}
-                    className={`w-full py-3 text-sm font-bold rounded transition-colors ${product?.stock && product?.stock !== '0'
+                    onClick={openHoldOverlay}
+                    disabled={!product?.stock || product?.stock === '0' || orderLoading}
+                    className={`w-full py-3 text-sm font-bold rounded transition-colors flex items-center justify-center gap-2 ${product?.stock && product?.stock !== '0' && !orderLoading
                       ? 'bg-green-600 text-white hover:bg-green-700'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : (!product?.stock || product?.stock === '0') ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white opacity-80'
                       }`}
                   >
-                    {product?.stock && product?.stock !== '0' ? 'BUY NOW' : 'OUT OF STOCK'}
+                    {orderLoading && (
+                      <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                      </svg>
+                    )}
+                    {product?.stock && product?.stock !== '0' ? (orderLoading ? 'PROCESSING...' : 'BUY NOW') : 'OUT OF STOCK'}
                   </button>
+                  {/* {orderMessage && (
+                    <div className={`text-xs mt-2 font-medium ${orderSuccess ? 'text-green-600' : 'text-red-600'}`}>{orderMessage}</div>
+                  )} */}
 
                   {/* <button className="w-full py-3 bg-green-600 text-white text-sm font-bold rounded hover:bg-green-700 flex items-center justify-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 25 24" fill="none">
@@ -578,9 +738,69 @@ export default function ShopProductDetails() {
           </div>
         )}
       </div>
+
+      {/* Hold-to-confirm overlay for BUY NOW */}
+      {showHold && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm">
+            <div className="bg-white rounded-2xl p-6 text-center relative shadow-xl">
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => { cancelHold(); setShowHold(false); }}
+                className="absolute right-3 top-3 p-2 rounded-full text-gray-500 hover:bg-gray-100"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+              <h3 className="text-base font-semibold text-gray-900 mb-1">Hold to Confirm</h3>
+              <p className="text-xs text-gray-500 mb-4">Confirm purchase of {quantity} × {(product?.product?.name || product?.name || 'Product')}</p>
+              <div className="text-sm font-medium mb-4">Total: <span className="text-green-600 font-semibold">BDT {formatMoney(currentPrice * quantity)} TK</span></div>
+              <div
+                className="mx-auto relative w-40 h-40 select-none"
+                onMouseDown={startHold}
+                onMouseUp={cancelHold}
+                onMouseLeave={cancelHold}
+                onTouchStart={(e) => { e.preventDefault(); startHold(); }}
+                onTouchEnd={cancelHold}
+                onTouchCancel={cancelHold}
+              >
+                <svg className="w-40 h-40 transform -rotate-90" viewBox="0 0 120 120">
+                  <circle cx="60" cy="60" r="54" stroke="#E5E7EB" strokeWidth="10" fill="none" />
+                  <circle
+                    cx="60" cy="60" r="54"
+                    stroke="#10B981" strokeWidth="10" fill="none" strokeLinecap="round"
+                    style={{
+                      strokeDasharray: CIRCUMFERENCE,
+                      strokeDashoffset: CIRCUMFERENCE - (holdProgress / 100) * CIRCUMFERENCE,
+                      transition: 'stroke-dashoffset 30ms linear'
+                    }}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <svg className="w-16 h-16 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 11.5c2.5 0 3.5 2 3.5 4.5M8 11c1-1.5 2.5-2 4-2s3 .5 4 2M6.5 9.5c1.5-2 3.5-3 5.5-3s4 .8 5.5 3M5 8c2-3 4.5-4 7-4s5 1 7 4M9.5 13.5c.5 1 .5 2 .5 3M12 13c1 1.5 1 3 1 4.5" />
+                  </svg>
+                </div>
+                <div className="absolute bottom-3 inset-x-0 text-[11px] text-gray-500">
+                  {holdProgress < 100 ? `Hold ${Math.ceil((HOLD_DURATION * (1 - holdProgress / 100)) / 1000)}s` : 'Release'}
+                </div>
+              </div>
+              <div className="mt-4 text-[11px] text-gray-500">Keep holding until the circle completes</div>
+            </div>
+          </div>
+        </div>
+      )}
+  <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop closeOnClick pauseOnFocusLoss draggable pauseOnHover theme="colored" />
     </section>
   );
 }
+
+// Hold-to-confirm overlay (placed after main return for clarity)
+// Inject overlay portal-like at end of component JSX (inside same file)
+
 
 function SpecRow({ label, value }) {
   return (

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import { Api_Base_Url } from '../config/api';
+import { isAuthenticated, getCurrentUser } from '../utils/auth.js';
 
 export default function ProductDetails() {
     const [product, setProduct] = useState(null);
@@ -9,7 +11,15 @@ export default function ProductDetails() {
     const [_selectedSize, _setSelectedSize] = useState('Big size');
     const [_selectedVolume, _setSelectedVolume] = useState('800ml');
     const [_quantity, _setQuantity] = useState(1);
+    const [userRole, setUserRole] = useState(null);
+    
+    // Order functionality states
+    const [showOrderModal, setShowOrderModal] = useState(false);
+    const [orderLoading, setOrderLoading] = useState(false);
+    const [currentUser, setCurrentUser] = useState(null);
+    
     const params = useParams();
+    const navigate = useNavigate();
 
     // Images will come from API (product.images); keep a safe fallback
     const productImages = Array.isArray(product?.images) && product.images.length
@@ -33,6 +43,18 @@ export default function ProductDetails() {
             .catch(() => setProduct(null));
     }, [params.id]);
 
+    // Detect user role (shop_owner vs others/guest)
+    useEffect(() => {
+        if (isAuthenticated()) {
+            const user = getCurrentUser();
+            setUserRole(user?.role || null);
+            setCurrentUser(user);
+        } else {
+            setUserRole(null);
+            setCurrentUser(null);
+        }
+    }, []);
+
     if (!product) {
         return (
             <section className="min-h-[60vh] flex items-center justify-center">
@@ -50,6 +72,372 @@ export default function ProductDetails() {
 
     const _handleQuantityChange = (delta) => {
         _setQuantity(prev => Math.max(1, prev + delta));
+    };
+
+    // Order functionality
+    const openOrderModal = () => {
+        setShowOrderModal(true);
+    };
+
+    const closeOrderModal = () => {
+        setShowOrderModal(false);
+    };
+
+    // Direct order without modal (alternative approach)
+    const handleDirectOrder = async () => {
+        console.log('🚀 [ProductDetails.jsx] DIRECT ORDER INITIATED');
+        console.log('📋 Current User:', currentUser);
+        console.log('🛍️ Product:', product);
+        console.log('🔢 Quantity:', _quantity);
+
+        if (!currentUser || currentUser.role !== 'shop_owner') {
+            console.error('❌ [ProductDetails.jsx] Authentication failed - Not a shop owner');
+            console.log('User role:', currentUser?.role);
+            toast.error('Only shop owners can place orders');
+            return;
+        }
+
+        if (!product) {
+            console.error('❌ [ProductDetails.jsx] No product available');
+            toast.error('Product information not available');
+            return;
+        }
+
+        if (_quantity < 1) {
+            console.error('❌ [ProductDetails.jsx] Invalid quantity:', _quantity);
+            toast.error('Quantity must be at least 1');
+            return;
+        }
+
+        try {
+            setOrderLoading(true);
+            console.log('⏳ [ProductDetails.jsx] Setting loading state to true');
+
+            // Get shop data from localStorage
+            const shopDataRaw = localStorage.getItem('shopData');
+            console.log('🏪 [ProductDetails.jsx] Raw shop data from localStorage:', shopDataRaw);
+            
+            const shopData = JSON.parse(shopDataRaw || '{}');
+            console.log('🏪 [ProductDetails.jsx] Parsed shop data:', shopData);
+            
+            const shop_id = shopData.id;
+            console.log('🆔 [ProductDetails.jsx] Extracted shop_id:', shop_id);
+
+            if (!shop_id) {
+                console.error('❌ [ProductDetails.jsx] Shop ID not found in localStorage');
+                console.log('Available shop data keys:', Object.keys(shopData));
+                toast.error('Shop information not found. Please refresh and try again.');
+                return;
+            }
+
+            const orderData = {
+                shop: shop_id,
+                product: product.id,
+                quantity: _quantity
+            };
+
+            console.log('📦 [ProductDetails.jsx] Order payload prepared:', orderData);
+            console.log('📦 [ProductDetails.jsx] Payload format: shop (not shop_id), product (not product_id)');
+            
+            const endpoint = `${Api_Base_Url}/api/shop-orders/`;
+            console.log('🌐 [ProductDetails.jsx] API Endpoint:', endpoint);
+            console.log('🔑 [ProductDetails.jsx] Access Token:', currentUser.accessToken ? 'Present' : 'Missing');
+            console.log('🔑 [ProductDetails.jsx] Token Preview:', currentUser.accessToken ? `${currentUser.accessToken.substring(0, 20)}...` : 'N/A');
+
+            const requestHeaders = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentUser.accessToken}`
+            };
+            console.log('📋 [ProductDetails.jsx] Request Headers:', requestHeaders);
+
+            console.log('📤 [ProductDetails.jsx] Sending API request...');
+            console.log('📤 [ProductDetails.jsx] Method: POST');
+            console.log('📤 [ProductDetails.jsx] URL:', endpoint);
+            console.log('📤 [ProductDetails.jsx] Headers:', requestHeaders);
+            console.log('📤 [ProductDetails.jsx] Body:', JSON.stringify(orderData, null, 2));
+
+            const response = await axios.post(
+                endpoint,
+                orderData,
+                {
+                    headers: requestHeaders
+                }
+            );
+
+            console.log('✅ [ProductDetails.jsx] API Response received');
+            console.log('📊 [ProductDetails.jsx] Response Status:', response.status);
+            console.log('📊 [ProductDetails.jsx] Response Status Text:', response.statusText);
+            console.log('📊 [ProductDetails.jsx] Response Headers:', response.headers);
+            console.log('📊 [ProductDetails.jsx] Response Data:', response.data);
+            console.log('📊 [ProductDetails.jsx] Full Response Object:', response);
+
+            if (response.status === 200 || response.status === 201) {
+                console.log('🎉 [ProductDetails.jsx] Order placed successfully!');
+                toast.success(`Order placed successfully! Quantity: ${_quantity} x ${product.name}`);
+                // Reset quantity to 1 after successful order
+                _setQuantity(1);
+                console.log('🔄 [ProductDetails.jsx] Quantity reset to 1');
+            } else {
+                console.error('❌ [ProductDetails.jsx] Unexpected response status:', response.status);
+                throw new Error('Order placement failed');
+            }
+
+        } catch (error) {
+            console.error('💥 [ProductDetails.jsx] Order placement error occurred');
+            console.error('💥 [ProductDetails.jsx] Error object:', error);
+            console.error('💥 [ProductDetails.jsx] Error message:', error.message);
+            console.error('💥 [ProductDetails.jsx] Error stack:', error.stack);
+            
+            if (error.response) {
+                console.error('📡 [ProductDetails.jsx] Error Response Status:', error.response.status);
+                console.error('📡 [ProductDetails.jsx] Error Response Headers:', error.response.headers);
+                console.error('📡 [ProductDetails.jsx] Error Response Data:', error.response.data);
+                console.error('📡 [ProductDetails.jsx] Full Error Response:', error.response);
+
+                let errorMessage = 'Failed to place order. Please try again.';
+
+                // Handle different response types
+                if (error.response?.data) {
+                    if (typeof error.response.data === 'string') {
+                        // Check if it's HTML error page (Django error format)
+                        if (error.response.data.includes('exception_value')) {
+                            // Extract error from Django HTML error page
+                            const match = error.response.data.match(/<pre class="exception_value">\[(.*?)\]<\/pre>/);
+                            if (match && match[1]) {
+                                // Clean up the extracted error message
+                                errorMessage = match[1]
+                                    .replace(/&#x27;/g, "'")
+                                    .replace(/&quot;/g, '"')
+                                    .replace(/&lt;/g, '<')
+                                    .replace(/&gt;/g, '>')
+                                    .replace(/&amp;/g, '&');
+                            }
+                        } else {
+                            // Plain text error
+                            errorMessage = error.response.data;
+                        }
+                    } else if (typeof error.response.data === 'object') {
+                        // JSON error response
+                        if (error.response.data.message) {
+                            errorMessage = error.response.data.message;
+                        } else if (error.response.data.error) {
+                            errorMessage = error.response.data.error;
+                        } else if (error.response.data.detail) {
+                            errorMessage = error.response.data.detail;
+                        } else if (error.response.data.non_field_errors) {
+                            errorMessage = Array.isArray(error.response.data.non_field_errors) 
+                                ? error.response.data.non_field_errors.join(', ')
+                                : error.response.data.non_field_errors;
+                        } else if (Array.isArray(error.response.data)) {
+                            errorMessage = error.response.data.join(', ');
+                        }
+                    }
+                }
+
+                // Show specific error based on status code
+                if (error.response.status === 400) {
+                    toast.error(`Order failed: ${errorMessage}`);
+                } else if (error.response.status === 401) {
+                    toast.error('Authentication failed. Please login again.');
+                } else if (error.response.status === 403) {
+                    toast.error('You are not authorized to place orders.');
+                } else if (error.response.status === 500) {
+                    toast.error(`Server error: ${errorMessage}`);
+                } else {
+                    toast.error(`Order failed: ${errorMessage}`);
+                }
+            } else if (error.request) {
+                console.error('📡 [ProductDetails.jsx] No response received');
+                console.error('📡 [ProductDetails.jsx] Request object:', error.request);
+                toast.error('Network error: No response from server');
+            } else {
+                console.error('⚙️ [ProductDetails.jsx] Request setup error:', error.message);
+                toast.error('Failed to place order. Please try again.');
+            }
+        } finally {
+            setOrderLoading(false);
+            console.log('🏁 [ProductDetails.jsx] Setting loading state to false');
+            console.log('🏁 [ProductDetails.jsx] Order process completed');
+        }
+    };
+
+    const handlePlaceOrder = async () => {
+        console.log('🚀 [ProductDetails.jsx] MODAL ORDER INITIATED');
+        console.log('📋 Current User:', currentUser);
+        console.log('🛍️ Product:', product);
+        console.log('🔢 Quantity:', _quantity);
+
+        if (!currentUser || currentUser.role !== 'shop_owner') {
+            console.error('❌ [ProductDetails.jsx] Authentication failed - Not a shop owner');
+            console.log('User role:', currentUser?.role);
+            toast.error('Only shop owners can place orders');
+            return;
+        }
+
+        if (!product) {
+            console.error('❌ [ProductDetails.jsx] No product available');
+            toast.error('Product information not available');
+            return;
+        }
+
+        if (_quantity < 1) {
+            console.error('❌ [ProductDetails.jsx] Invalid quantity:', _quantity);
+            toast.error('Quantity must be at least 1');
+            return;
+        }
+
+        try {
+            setOrderLoading(true);
+            console.log('⏳ [ProductDetails.jsx] Setting loading state to true');
+
+            // Get shop data from localStorage
+            const shopDataRaw = localStorage.getItem('shopData');
+            console.log('🏪 [ProductDetails.jsx] Raw shop data from localStorage:', shopDataRaw);
+            
+            const shopData = JSON.parse(shopDataRaw || '{}');
+            console.log('🏪 [ProductDetails.jsx] Parsed shop data:', shopData);
+            
+            const shop_id = shopData.id;
+            console.log('🆔 [ProductDetails.jsx] Extracted shop_id:', shop_id);
+
+            if (!shop_id) {
+                console.error('❌ [ProductDetails.jsx] Shop ID not found in localStorage');
+                console.log('Available shop data keys:', Object.keys(shopData));
+                toast.error('Shop information not found. Please refresh and try again.');
+                return;
+            }
+
+            const orderData = {
+                shop_id: shop_id,
+                product_id: product.id,
+                quantity: _quantity
+            };
+
+            console.log('📦 [ProductDetails.jsx] Order payload prepared:', orderData);
+            console.log('📦 [ProductDetails.jsx] Payload format: shop_id, product_id (original format)');
+            
+            const endpoint = `${Api_Base_Url}/api/place-order/`;
+            console.log('🌐 [ProductDetails.jsx] API Endpoint:', endpoint);
+            console.log('🔑 [ProductDetails.jsx] Access Token:', currentUser.accessToken ? 'Present' : 'Missing');
+            console.log('🔑 [ProductDetails.jsx] Token Preview:', currentUser.accessToken ? `${currentUser.accessToken.substring(0, 20)}...` : 'N/A');
+
+            const requestHeaders = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentUser.accessToken}`
+            };
+            console.log('📋 [ProductDetails.jsx] Request Headers:', requestHeaders);
+
+            console.log('📤 [ProductDetails.jsx] Sending API request...');
+            console.log('📤 [ProductDetails.jsx] Method: POST');
+            console.log('📤 [ProductDetails.jsx] URL:', endpoint);
+            console.log('📤 [ProductDetails.jsx] Headers:', requestHeaders);
+            console.log('📤 [ProductDetails.jsx] Body:', JSON.stringify(orderData, null, 2));
+
+            const response = await axios.post(
+                endpoint,
+                orderData,
+                {
+                    headers: requestHeaders
+                }
+            );
+
+            console.log('✅ [ProductDetails.jsx] API Response received');
+            console.log('📊 [ProductDetails.jsx] Response Status:', response.status);
+            console.log('📊 [ProductDetails.jsx] Response Status Text:', response.statusText);
+            console.log('📊 [ProductDetails.jsx] Response Headers:', response.headers);
+            console.log('📊 [ProductDetails.jsx] Response Data:', response.data);
+            console.log('📊 [ProductDetails.jsx] Full Response Object:', response);
+
+            if (response.status === 200 || response.status === 201) {
+                console.log('🎉 [ProductDetails.jsx] Order placed successfully!');
+                toast.success(`Order placed successfully! Quantity: ${_quantity} x ${product.name}`);
+                closeOrderModal();
+                console.log('🔄 [ProductDetails.jsx] Order modal closed');
+                // Reset quantity to 1 after successful order
+                _setQuantity(1);
+                console.log('🔄 [ProductDetails.jsx] Quantity reset to 1');
+            } else {
+                console.error('❌ [ProductDetails.jsx] Unexpected response status:', response.status);
+                throw new Error('Order placement failed');
+            }
+
+        } catch (error) {
+            console.error('💥 [ProductDetails.jsx] Order placement error occurred');
+            console.error('💥 [ProductDetails.jsx] Error object:', error);
+            console.error('💥 [ProductDetails.jsx] Error message:', error.message);
+            console.error('💥 [ProductDetails.jsx] Error stack:', error.stack);
+            
+            if (error.response) {
+                console.error('📡 [ProductDetails.jsx] Error Response Status:', error.response.status);
+                console.error('📡 [ProductDetails.jsx] Error Response Headers:', error.response.headers);
+                console.error('📡 [ProductDetails.jsx] Error Response Data:', error.response.data);
+                console.error('📡 [ProductDetails.jsx] Full Error Response:', error.response);
+
+                let errorMessage = 'Failed to place order. Please try again.';
+
+                // Handle different response types
+                if (error.response?.data) {
+                    if (typeof error.response.data === 'string') {
+                        // Check if it's HTML error page (Django error format)
+                        if (error.response.data.includes('exception_value')) {
+                            // Extract error from Django HTML error page
+                            const match = error.response.data.match(/<pre class="exception_value">\[(.*?)\]<\/pre>/);
+                            if (match && match[1]) {
+                                // Clean up the extracted error message
+                                errorMessage = match[1]
+                                    .replace(/&#x27;/g, "'")
+                                    .replace(/&quot;/g, '"')
+                                    .replace(/&lt;/g, '<')
+                                    .replace(/&gt;/g, '>')
+                                    .replace(/&amp;/g, '&');
+                            }
+                        } else {
+                            // Plain text error
+                            errorMessage = error.response.data;
+                        }
+                    } else if (typeof error.response.data === 'object') {
+                        // JSON error response
+                        if (error.response.data.message) {
+                            errorMessage = error.response.data.message;
+                        } else if (error.response.data.error) {
+                            errorMessage = error.response.data.error;
+                        } else if (error.response.data.detail) {
+                            errorMessage = error.response.data.detail;
+                        } else if (error.response.data.non_field_errors) {
+                            errorMessage = Array.isArray(error.response.data.non_field_errors) 
+                                ? error.response.data.non_field_errors.join(', ')
+                                : error.response.data.non_field_errors;
+                        } else if (Array.isArray(error.response.data)) {
+                            errorMessage = error.response.data.join(', ');
+                        }
+                    }
+                }
+
+                // Show specific error based on status code
+                if (error.response.status === 400) {
+                    toast.error(`Order failed: ${errorMessage}`);
+                } else if (error.response.status === 401) {
+                    toast.error('Authentication failed. Please login again.');
+                } else if (error.response.status === 403) {
+                    toast.error('You are not authorized to place orders.');
+                } else if (error.response.status === 500) {
+                    toast.error(`Server error: ${errorMessage}`);
+                } else {
+                    toast.error(`Order failed: ${errorMessage}`);
+                }
+            } else if (error.request) {
+                console.error('📡 [ProductDetails.jsx] No response received');
+                console.error('📡 [ProductDetails.jsx] Request object:', error.request);
+                toast.error('Network error: No response from server');
+            } else {
+                console.error('⚙️ [ProductDetails.jsx] Request setup error:', error.message);
+                toast.error('Failed to place order. Please try again.');
+            }
+        } finally {
+            setOrderLoading(false);
+            console.log('🏁 [ProductDetails.jsx] Setting loading state to false');
+            console.log('🏁 [ProductDetails.jsx] Order process completed');
+        }
     };
 
     return (
@@ -235,23 +623,68 @@ export default function ProductDetails() {
                                 </div> */}
 
                                 {/* Action Buttons */}
-                                <div className="space-y-3">
-
-                                    <button className="w-full py-3 bg-green-600 text-white text-sm font-bold rounded hover:bg-green-700">
-                                        BUY NOW
-                                    </button>
-
-                                    <button className="w-full py-3 bg-zinc-800 text-white text-sm font-bold rounded hover:bg-zinc-900">
-                                        VIEW IN STORE
-                                    </button>
-                                </div>
+                                {userRole === 'shop_owner' ? (
+                                    <div className="space-y-4">
+                                        {/* Quantity (only for shop owner) */}
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-semibold text-zinc-800">QTY:</span>
+                                            <div className="flex items-center border border-neutral-400 rounded">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => _handleQuantityChange(-1)}
+                                                    className="w-8 h-8 flex items-center justify-center hover:bg-gray-100"
+                                                >
+                                                    <span className="text-lg font-bold">−</span>
+                                                </button>
+                                                <span className="px-3 py-1 text-sm font-medium text-zinc-800 min-w-[32px] text-center">{_quantity}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => _handleQuantityChange(1)}
+                                                    className="w-8 h-8 flex items-center justify-center hover:bg-gray-100"
+                                                >
+                                                    <span className="text-lg font-bold">+</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            type="button"
+                                            onClick={handleDirectOrder}
+                                            disabled={orderLoading}
+                                            className="w-full cursor-pointer py-3 bg-green-600 text-white text-sm font-bold rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                        >
+                                            {orderLoading ? (
+                                                <>
+                                                    <svg className="animate-spin w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                    </svg>
+                                                    Placing Order...
+                                                </>
+                                            ) : (
+                                                'ORDER NOW'
+                                            )}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        <button className="w-full cursor-pointer py-3 bg-green-600 text-white text-sm font-bold rounded hover:bg-green-700">
+                                            BUY NOW
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate(`/view-in-shop/${product.id}`)}
+                                            className="w-full py-3 bg-zinc-800 text-white text-sm font-bold cursor-pointer rounded hover:bg-zinc-900"
+                                        >
+                                            VIEW IN SHOP
+                                        </button>
+                                    </div>
+                                )}
 
                                 {/* Description */}
                                 {product?.description && (
                                     <div className="mt-6">
-                                        <div 
+                                        <div
                                             className="[&_table]:border-collapse [&_table]:w-full [&_td]:border [&_td]:border-gray-400 [&_td]:p-2 [&_th]:border [&_th]:border-gray-400 [&_th]:p-2 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-4 [&_p]:mb-2"
-                                            dangerouslySetInnerHTML={{ __html: product.description }} 
+                                            dangerouslySetInnerHTML={{ __html: product.description }}
                                         />
                                     </div>
                                 )}
@@ -370,6 +803,85 @@ export default function ProductDetails() {
                     <p className="text-sm text-gray-700">{product.name} by {product.brand}. Volume: {product.volume || '—'}. Ships from {product.shippedFrom}. Price: {getCurrentPrice()} TK.</p>
                 </div>
             </div>
+
+            {/* Order Confirmation Modal */}
+            {showOrderModal && product && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900">Confirm Order</h3>
+                            <button
+                                onClick={closeOrderModal}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                                disabled={orderLoading}
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="mb-4">
+                            <div className="flex items-center gap-3 mb-3">
+                                <img
+                                    src={productImages[selectedImage] || productImages[0]}
+                                    alt={product.name}
+                                    className="w-16 h-16 object-cover rounded-lg"
+                                    onError={(e) => {
+                                        e.target.src = 'https://placehold.co/64x64';
+                                    }}
+                                />
+                                <div>
+                                    <h4 className="font-semibold text-gray-900">{product.name}</h4>
+                                    <p className="text-sm text-gray-500">{product.brand}</p>
+                                    <p className="text-lg font-bold text-green-600">৳{getCurrentPrice()}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mb-6 p-3 bg-gray-50 rounded-lg">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm text-gray-600">Quantity:</span>
+                                <span className="text-sm font-semibold">{_quantity}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-600">Total Amount:</span>
+                                <span className="text-lg font-bold text-green-600">
+                                    ৳{(getCurrentPrice() * _quantity).toFixed(2)}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                type="button"
+                                onClick={closeOrderModal}
+                                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                                disabled={orderLoading}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handlePlaceOrder}
+                                disabled={orderLoading}
+                                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {orderLoading ? (
+                                    <>
+                                        <svg className="animate-spin w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        Placing Order...
+                                    </>
+                                ) : (
+                                    'Confirm Order'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </section>
     );
 }

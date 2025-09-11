@@ -9,13 +9,21 @@ import { Link } from 'react-router-dom';
 // - to?: string (link to details)
 // - onView?: () => void (optional click handler if no link)
 // - compact?: boolean (default false)
+// - showOrderButton?: boolean (show order button for shop owners)
+// - onOrder?: (product) => void (order button handler)
+// - product?: object (product data for order functionality)
 export default function ProductCard({
   imageSrc = 'https://placehold.co/160x120',
   name = 'Product name',
   price = 0,
+  brand,
+  category,
   to,
   onView,
   compact = false,
+  showOrderButton = false,
+  onOrder,
+  product,
 }) {
   return (
     <div className={
@@ -53,6 +61,13 @@ export default function ProductCard({
           {name}
         </h3>
 
+        {(brand || category) && (
+          <div className="flex flex-col items-center gap-0.5 -mt-1">
+            {brand && <span className="text-[11px] tracking-wide uppercase text-gray-500 font-medium">{brand}</span>}
+            {category && <span className="text-[11px] text-gray-400">{category}</span>}
+          </div>
+        )}
+
         {/* Price */}
         <div className="text-center">
           <div className={compact ? 'text-lg font-bold text-green-600' : 'text-xl font-bold text-green-600'}>
@@ -60,8 +75,8 @@ export default function ProductCard({
           </div>
         </div>
 
-        {/* View Button */}
-        <div className="mt-1">
+  {/* View Button */}
+        <div className="mt-1 space-y-2">
           {to ? (
             <Link
               to={to}
@@ -86,6 +101,25 @@ export default function ProductCard({
               aria-label={`View ${name}`}
             >
               View Details
+            </button>
+          )}
+          
+          {/* Order Button for Shop Owners */}
+          {showOrderButton && onOrder && (
+            <button
+              type="button"
+              onClick={() => onOrder(product || { id: Date.now(), name, price, brand, category, image: imageSrc })}
+              className={
+                compact
+                  ? 'w-full inline-flex items-center justify-center rounded-lg bg-amber-950 px-3 py-2 text-xs font-semibold text-white  transition-colors shadow-sm'
+                  : 'w-full inline-flex items-center justify-center rounded-lg bg-amber-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-700 transition-colors shadow-sm'
+              }
+              aria-label={`Order ${name}`}
+            >
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.293 2.293a1 1 0 001.414 1.414L7 16m0-3a2 2 0 11-4 0 2 2 0 014 0zm2 3h10a2 2 0 100-4H9a2 2 0 100 4z" />
+              </svg>
+              Order Now
             </button>
           )}
         </div>

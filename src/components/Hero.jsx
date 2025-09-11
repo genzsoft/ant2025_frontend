@@ -1,22 +1,27 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import axios from 'axios';
 import ProductCard from './productCard.jsx';
 import { Api_Base_Url } from '../config/api.js';
 
 export default function Hero() {
-  const slides = useMemo(
+  // Fallback slides if API has no banners
+  const fallbackSlides = useMemo(
     () => [
       'https://images.unsplash.com/photo-1520072959219-c595dc870360?q=80&w=1600&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1515955656352-a1fa3ffcd111?q=80&w=1600&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=1600&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=1600&auto=format&fit=crop'
     ],
     []
   );
+
+  const [bannerImages, setBannerImages] = useState([]); // array of strings (image URLs)
+  const slides = bannerImages.length ? bannerImages : fallbackSlides;
   const [idx, setIdx] = useState(0);
   const viewportRef = useRef(null);
   const [vw, setVw] = useState(0);
 
   useEffect(() => {
+    if (!slides.length) return; // defensive
     const id = setInterval(() => setIdx((i) => (i + 1) % slides.length), 4000);
     return () => clearInterval(id);
   }, [slides.length]);
@@ -44,8 +49,51 @@ export default function Hero() {
   }, []);
 
   const go = (dir) => {
+    if (!slides.length) return;
     setIdx((i) => (dir === 'next' ? (i + 1) % slides.length : (i - 1 + slides.length) % slides.length));
   };
+
+  // Fetch banners (only active). Falls back to full list then filters.
+  useEffect(() => {
+    let cancelled = false;
+
+    const normalizeUrl = (u) => {
+      if (!u) return null;
+      if (/^https?:/i.test(u)) return u;
+      // ensure single slash join
+      return `${Api_Base_Url}${u.startsWith('/') ? u : `/${u}`}`;
+    };
+
+    const load = async () => {
+      try {
+        // Try active endpoint first
+        const activeRes = await axios.get(`${Api_Base_Url}/api/banners/active/`);
+        let list = Array.isArray(activeRes.data) ? activeRes.data : [];
+        if ((!list || list.length === 0)) {
+          // fallback: fetch all then filter by is_active
+            try {
+              const allRes = await axios.get(`${Api_Base_Url}/api/banners/`);
+              const allList = Array.isArray(allRes.data) ? allRes.data : [];
+              list = allList.filter(b => b && (b.is_active === true || b.is_active === 'true'));
+            } catch (innerErr) {
+              console.warn('Fallback banners fetch failed:', innerErr);
+            }
+        }
+        if (cancelled) return;
+        const imgs = list
+          .map(b => normalizeUrl(b.image))
+          .filter(Boolean);
+        if (imgs.length) {
+          setBannerImages(imgs);
+          setIdx(0); // reset index after load
+        }
+      } catch (err) {
+        console.warn('Active banners fetch failed, using fallback slides.', err);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, []); // Api_Base_Url is static config
 
   const [products, setProducts] = useState([]);
   useEffect(() => {
@@ -59,8 +107,8 @@ export default function Hero() {
         // Handle direct array response or nested response
         const list = Array.isArray(res.data) 
           ? res.data.slice(0, 5) 
-          : Array.isArray(res.data?.products) 
-            ? res.data.products.slice(0, 5) 
+          : Array.isArray(res.data?.results) 
+            ? res.data.results.slice(0, 5) 
             : [];
         setProducts(list);
       })

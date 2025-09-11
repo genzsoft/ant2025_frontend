@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { isAuthenticated, getCurrentUser, getStoredTokens } from '../utils/auth.js';
 import { Api_Base_Url } from '../config/api.js';
@@ -20,6 +20,15 @@ export default function Recharge() {
     account: '',
     amount: '',
   });
+
+  // Hold-to-confirm (Top Up) state
+  const [showHold, setShowHold] = useState(false);
+  const [holdProgress, setHoldProgress] = useState(0); // 0-100
+  const holdTimerRef = useRef(null);
+  const holdStartRef = useRef(null);
+  const HOLD_DURATION = 3000; // ms to complete hold
+  const PROGRESS_RADIUS = 54; // matches the SVG circle r
+  const CIRCUMFERENCE = 2 * Math.PI * PROGRESS_RADIUS;
 
   // Guard: Only shop owners can access
   useEffect(() => {
@@ -44,8 +53,7 @@ export default function Recharge() {
   };
 
   const submitCashIn = async (e) => {
-    e.preventDefault();
-    e.preventDefault();
+  e.preventDefault();
     setError('');
 
     // basic validation
@@ -109,8 +117,8 @@ export default function Recharge() {
     }
   };
 
-  const submitSend = async (e) => {
-    e.preventDefault();
+  // Core Top Up logic extracted so it can be called after hold completes
+  const performTopUp = async () => {
     setError('');
 
     // basic validation
@@ -181,6 +189,78 @@ export default function Recharge() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Open the hold-to-confirm overlay (validates basic inputs first)
+  const openHoldOverlay = (e) => {
+    if (e) e.preventDefault();
+    setError('');
+
+    if (!sendForm.account || !sendForm.amount) {
+      setError('Please provide account number and amount.');
+      return;
+    }
+    const phoneOnly = sendForm.account.replace(/\D/g, '');
+    if (phoneOnly.length < 10) {
+      setError('Please enter a valid receiver phone number.');
+      return;
+    }
+
+    // Reset and show overlay
+    if (holdTimerRef.current) {
+      clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    setHoldProgress(0);
+    setShowHold(true);
+  };
+
+  // Start/cancel hold events
+  const startHold = () => {
+    if (submitting) return;
+    // For mobile haptics
+    if (navigator && 'vibrate' in navigator) {
+      try { navigator.vibrate(10); } catch { /* ignore */ }
+    }
+    holdStartRef.current = performance.now();
+    if (holdTimerRef.current) {
+      clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    holdTimerRef.current = setInterval(() => {
+      const now = performance.now();
+      const elapsed = now - (holdStartRef.current || now);
+      const p = Math.min(100, Math.round((elapsed / HOLD_DURATION) * 100));
+      setHoldProgress(p);
+      if (p >= 100) {
+        clearInterval(holdTimerRef.current);
+        holdTimerRef.current = null;
+  setShowHold(false);
+  try { if (navigator && 'vibrate' in navigator) navigator.vibrate(30); } catch { /* ignore */ }
+        // Trigger the Top Up after successful hold
+        performTopUp();
+      }
+    }, 30);
+  };
+
+  const cancelHold = () => {
+    if (holdTimerRef.current) {
+      clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    setHoldProgress(0);
+  };
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (holdTimerRef.current) clearInterval(holdTimerRef.current);
+    };
+  }, []);
+
+  const submitSend = (e) => {
+    e.preventDefault();
+    openHoldOverlay();
   };
 
   return (
@@ -339,7 +419,8 @@ export default function Recharge() {
               </div>
 
               <button
-                type="submit"
+                type="button"
+                onClick={openHoldOverlay}
                 disabled={submitting}
                 className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-green-700 disabled:bg-green-400"
               >
@@ -351,6 +432,64 @@ export default function Recharge() {
             </form>
           )}
         </div>
+
+        {/* Hold-to-confirm overlay */}
+        {showHold && (
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center">
+            <div className="w-full max-w-sm mx-4">
+              <div className="bg-white rounded-2xl p-5 text-center relative shadow-xl">
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => { cancelHold(); setShowHold(false); }}
+                  className="absolute right-3 top-3 p-2 rounded-full text-gray-500 hover:bg-gray-100"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Hold to Confirm</h3>
+                <p className="text-xs text-gray-500 mb-4">Press and hold the fingerprint to Top Up</p>
+
+                <div
+                  className="mx-auto relative w-40 h-40 select-none"
+                  onMouseDown={startHold}
+                  onMouseUp={cancelHold}
+                  onMouseLeave={cancelHold}
+                  onTouchStart={(e) => { e.preventDefault(); startHold(); }}
+                  onTouchEnd={cancelHold}
+                  onTouchCancel={cancelHold}
+                >
+                  <svg className="w-40 h-40 transform -rotate-90" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="54" stroke="#E5E7EB" strokeWidth="10" fill="none" />
+                    <circle
+                      cx="60" cy="60" r="54"
+                      stroke="#10B981" strokeWidth="10" fill="none" strokeLinecap="round"
+                      style={{
+                        strokeDasharray: CIRCUMFERENCE,
+                        strokeDashoffset: CIRCUMFERENCE - (holdProgress / 100) * CIRCUMFERENCE,
+                        transition: 'stroke-dashoffset 30ms linear'
+                      }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {/* fingerprint icon mimic */}
+                    <svg className="w-16 h-16 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 11.5c2.5 0 3.5 2 3.5 4.5M8 11c1-1.5 2.5-2 4-2s3 .5 4 2M6.5 9.5c1.5-2 3.5-3 5.5-3s4 .8 5.5 3M5 8c2-3 4.5-4 7-4s5 1 7 4M9.5 13.5c.5 1 .5 2 .5 3M12 13c1 1.5 1 3 1 4.5" />
+                    </svg>
+                  </div>
+                  <div className="absolute bottom-3 inset-x-0 text-[11px] text-gray-500">
+                    {holdProgress < 100 ? `Hold ${Math.ceil((HOLD_DURATION * (1 - holdProgress / 100)) / 1000)}s` : 'Release'}
+                  </div>
+                </div>
+
+                <div className="mt-4 text-[11px] text-gray-500">Keep holding until the circle completes</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tips */}
         <p className="mt-4 text-center text-[11px] text-gray-500">

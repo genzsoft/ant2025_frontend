@@ -84,6 +84,8 @@ export default function Shops() {
       
       const response = await axios.get(url);
       setShops(response.data);
+      console.log(response.data);
+      
     } catch (error) {
       console.error('Error fetching shops:', error);
       setError('Failed to load shops. Please try again.');

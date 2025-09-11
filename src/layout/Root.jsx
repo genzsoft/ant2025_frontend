@@ -1,5 +1,7 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { useEffect } from "react";
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import Footer from "../components/sharedComponents/Footer";
 import Navbar from "../components/sharedComponents/Navbar";
 
@@ -26,6 +28,18 @@ const Root = () => {
     <Navbar />
     <Outlet />
     <Footer />
+    <ToastContainer
+      position="top-right"
+      autoClose={5000}
+      hideProgressBar={false}
+      newestOnTop={false}
+      closeOnClick
+      rtl={false}
+      pauseOnFocusLoss
+      draggable
+      pauseOnHover
+      theme="light"
+    />
     </>
   );
 };

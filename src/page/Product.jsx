@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { toast } from 'react-toastify';
 import ListProductCard from "../components/ListProductCard.jsx";
 import ProductCard from "../components/productCard.jsx";
+import { Api_Base_Url } from "../config/api.js";
+import { getCurrentUser } from "../utils/auth.js";
 
 export default function Product() {
   const [products, setProducts] = useState([]);
@@ -9,90 +12,273 @@ export default function Product() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All Categories");
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-  const [filters, setFilters] = useState({
-    brand: "",
-    shippedFrom: "",
-    volume: "",
-    size: "",
-    rating: 0,
-  });
   const [view, setView] = useState("grid"); // "grid" or "list"
-  const [showMore, setShowMore] = useState({
-    brand: false,
-    shippedFrom: false,
-    volume: false,
-    size: false,
-  });
   const [itemsToShow, setItemsToShow] = useState(20); // for load more
-
-  // Derive categories and facet options from products
-  const brandOptions = useMemo(() => {
-    const setVals = new Set(products.map((p) => p.brand).filter(Boolean));
-    return Array.from(setVals).sort();
+  
+  // Order functionality states
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [orderQuantity, setOrderQuantity] = useState(1);
+  const [orderLoading, setOrderLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  
+  const dropdownRef = useRef(null);
+  const categoryBtnRef = useRef(null);
+  // Categories from product.category field
+  const categories = useMemo(() => {
+    const setVals = new Set();
+    products.forEach(p => {
+      const cat = p.category || 'Uncategorized';
+      setVals.add(cat);
+    });
+    return ["All Categories", ...Array.from(setVals).sort()];
   }, [products]);
-  const shippedFromOptions = useMemo(() => {
-    const setVals = new Set(products.map((p) => p.shippedFrom).filter(Boolean));
-    return Array.from(setVals).sort();
-  }, [products]);
-  const volumeOptions = useMemo(() => {
-    const setVals = new Set(products.map((p) => p.volume).filter(Boolean));
-    return Array.from(setVals).sort();
-  }, [products]);
-  const sizeOptions = useMemo(() => {
-    const setVals = new Set(products.map((p) => p.size).filter(Boolean));
-    return Array.from(setVals).sort();
-  }, [products]);
-  const categories = useMemo(() => ["All Categories", ...brandOptions], [brandOptions]);
 
   useEffect(() => {
-    axios.get("/data.json").then((res) => {
-      const productList = res.data.products || []; // fallback in case it's missing
-      setProducts(productList);
-      setFilteredProducts(productList);
-    });
+    let mounted = true;
+    
+    // Get current user
+    const user = getCurrentUser();
+    if (mounted) {
+      setCurrentUser(user);
+    }
+    
+    // Fetch products
+    axios.get(`${Api_Base_Url}/api/products/`)
+      .then(res => {
+        if (!mounted) return;
+        const list = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.results) ? res.data.results : []);
+        // Normalize price to number
+        const normalized = list.map(p => ({
+          ...p,
+          price: typeof p.price === 'string' ? parseFloat(p.price) : p.price
+        }));
+        setProducts(normalized);
+        setFilteredProducts(normalized);
+      })
+      .catch(err => {
+        console.error('Products API error:', err);
+        if (mounted) {
+          setProducts([]);
+          setFilteredProducts([]);
+        }
+      });
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
     let result = [...products];
     
-    // Apply search filter
-    if (searchTerm) {
-      result = result.filter(p => 
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.brand.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    // Apply search filter (name or category)
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter(p => (
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.category || '').toLowerCase().includes(q)
+      ));
     }
-    
+
     // Apply category filter
     if (selectedCategory !== "All Categories") {
-      result = result.filter(p => p.brand === selectedCategory);
+      result = result.filter(p => (p.category || 'Uncategorized') === selectedCategory);
     }
     
-    // Apply other filters
-    if (filters.brand) result = result.filter(p => p.brand === filters.brand);
-    if (filters.shippedFrom) result = result.filter(p => p.shippedFrom === filters.shippedFrom);
-    if (filters.volume) result = result.filter(p => p.volume === filters.volume);
-    if (filters.size) result = result.filter(p => p.size === filters.size);
-    if (filters.rating) result = result.filter(p => p.rating === filters.rating);
-    
     setFilteredProducts(result);
-  }, [filters, products, searchTerm, selectedCategory]);
+  }, [products, searchTerm, selectedCategory]);
 
   // Reset visible items when filter/search changes
   useEffect(() => {
     setItemsToShow(20);
   }, [filteredProducts]);
 
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: prev[key] === value ? "" : value // toggle
-    }));
-  };
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showCategoryDropdown) return;
+    const handleClickOutside = (e) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target) &&
+        categoryBtnRef.current &&
+        !categoryBtnRef.current.contains(e.target)
+      ) {
+        setShowCategoryDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCategoryDropdown]);
 
   const handleSearch = () => {
-    // Search is already handled in useEffect, but we can add additional logic here if needed
-    console.log("Searching for:", searchTerm, "in category:", selectedCategory);
+    // Search handled reactively; keep for potential analytics.
+    console.log("Search:", searchTerm, "Category:", selectedCategory);
+  };
+
+  // Order functionality
+  const openOrderModal = (product) => {
+    setSelectedProduct(product);
+    setOrderQuantity(1);
+    setShowOrderModal(true);
+  };
+
+  const closeOrderModal = () => {
+    setShowOrderModal(false);
+    setSelectedProduct(null);
+    setOrderQuantity(1);
+  };
+
+  const handlePlaceOrder = async () => {
+
+    if (!currentUser || currentUser.role !== 'shop_owner') {
+      console.error('❌ [Product.jsx] Authentication failed - Not a shop owner');
+      toast.error('Only shop owners can place orders');
+      return;
+    }
+
+    if (!selectedProduct) {
+      console.error('❌ [Product.jsx] No product selected');
+      toast.error('Please select a product');
+      return;
+    }
+
+    if (orderQuantity < 1) {
+      console.error('❌ [Product.jsx] Invalid quantity:', orderQuantity);
+      toast.error('Quantity must be at least 1');
+      return;
+    }
+
+    try {
+      setOrderLoading(true);
+
+      // Get shop data from localStorage
+      const shopDataRaw = localStorage.getItem('shopData');
+      
+      const shopData = JSON.parse(shopDataRaw || '{}');
+      
+      const shop_id = shopData.id;
+
+      if (!shop_id) {
+        console.error('❌ [Product.jsx] Shop ID not found in localStorage');
+        console.log('Available shop data keys:', Object.keys(shopData));
+        toast.error('Shop information not found. Please refresh and try again.');
+        return;
+      }
+
+      const orderData = {
+        shop: shop_id,
+        product: selectedProduct.id,
+        quantity: orderQuantity
+      };
+
+      
+      const endpoint = `${Api_Base_Url}/api/shop-orders/`;
+
+      const requestHeaders = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentUser.accessToken}`
+      };
+      console.log('📋 [Product.jsx] Request Headers:', requestHeaders);
+
+
+      const response = await axios.post(
+        endpoint,
+        orderData,
+        {
+          headers: requestHeaders
+        }
+      );
+
+      console.log('✅ [Product.jsx] API Response received');
+      console.log('📊 [Product.jsx] Response Status:', response.status);
+      console.log('📊 [Product.jsx] Response Status Text:', response.statusText);
+      console.log('📊 [Product.jsx] Response Headers:', response.headers);
+      console.log('📊 [Product.jsx] Response Data:', response.data);
+      console.log('📊 [Product.jsx] Full Response Object:', response);
+
+      if (response.status === 200 || response.status === 201) {
+        console.log('🎉 [Product.jsx] Order placed successfully!');
+        toast.success(`Order placed successfully! Quantity: ${orderQuantity} x ${selectedProduct.name}`);
+        closeOrderModal();
+      } else {
+        console.error('❌ [Product.jsx] Unexpected response status:', response.status);
+        throw new Error('Order placement failed');
+      }
+
+    } catch (error) {
+      console.error('💥 [Product.jsx] Error object:', error);
+      console.error('💥 [Product.jsx] Error message:', error.message);
+      console.error('💥 [Product.jsx] Error stack:', error.stack);
+      
+      if (error.response) {
+        console.error('📡 [Product.jsx] Error Response Status:', error.response.status);
+        console.error('📡 [Product.jsx] Error Response Headers:', error.response.headers);
+        console.error('📡 [Product.jsx] Error Response Data:', error.response.data);
+        console.error('📡 [Product.jsx] Full Error Response:', error.response);
+
+        let errorMessage = 'Failed to place order. Please try again.';
+
+        // Handle different response types
+        if (error.response?.data) {
+          if (typeof error.response.data === 'string') {
+            // Check if it's HTML error page (Django error format)
+            if (error.response.data.includes('exception_value')) {
+              // Extract error from Django HTML error page
+              const match = error.response.data.match(/<pre class="exception_value">\[(.*?)\]<\/pre>/);
+              if (match && match[1]) {
+                // Clean up the extracted error message
+                errorMessage = match[1]
+                  .replace(/&#x27;/g, "'")
+                  .replace(/&quot;/g, '"')
+                  .replace(/&lt;/g, '<')
+                  .replace(/&gt;/g, '>')
+                  .replace(/&amp;/g, '&');
+              }
+            } else {
+              // Plain text error
+              errorMessage = error.response.data;
+            }
+          } else if (typeof error.response.data === 'object') {
+            // JSON error response
+            if (error.response.data.message) {
+              errorMessage = error.response.data.message;
+            } else if (error.response.data.error) {
+              errorMessage = error.response.data.error;
+            } else if (error.response.data.detail) {
+              errorMessage = error.response.data.detail;
+            } else if (error.response.data.non_field_errors) {
+              errorMessage = Array.isArray(error.response.data.non_field_errors) 
+                ? error.response.data.non_field_errors.join(', ')
+                : error.response.data.non_field_errors;
+            } else if (Array.isArray(error.response.data)) {
+              errorMessage = error.response.data.join(', ');
+            }
+          }
+        }
+
+        // Show specific error based on status code
+        if (error.response.status === 400) {
+          toast.error(`Order failed: ${errorMessage}`);
+        } else if (error.response.status === 401) {
+          toast.error('Authentication failed. Please login again.');
+        } else if (error.response.status === 403) {
+          toast.error('You are not authorized to place orders.');
+        } else if (error.response.status === 500) {
+          toast.error(`Server error: ${errorMessage}`);
+        } else {
+          toast.error(`Order failed: ${errorMessage}`);
+        }
+      } else if (error.request) {
+        console.error('📡 [Product.jsx] No response received');
+        console.error('📡 [Product.jsx] Request object:', error.request);
+        toast.error('Network error: No response from server');
+      } else {
+        console.error('⚙️ [Product.jsx] Request setup error:', error.message);
+        toast.error('Failed to place order. Please try again.');
+      }
+    } finally {
+      setOrderLoading(false);
+      console.log('🏁 [Product.jsx] Setting loading state to false');
+      console.log('🏁 [Product.jsx] Order process completed');
+    }
   };
 
   const CheckBox = ({ active }) => (
@@ -124,61 +310,91 @@ export default function Product() {
       <div className="max-w-[1360px] mx-auto">
         <div className="bg-white rounded-lg shadow overflow-hidden min-h-[1000px]">
           
-          {/* Search Bar */}
-          <div className="flex justify-center mt-14">
-            <div className="w-[722px] border border-green-600 flex">
-              {/* Category Dropdown */}
-              <div className="relative">
-                <button 
-                  className="px-6 py-3 border-r border-green-600 flex items-center gap-2 text-neutral-400 text-xs font-normal font-['Inter'] hover:bg-gray-50"
-                  onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+          {/* Search Bar (Enhanced) */}
+          <div className="flex justify-center mt-14 px-2">
+            <div className="w-full max-w-[760px] relative">
+        <div className="flex items-stretch bg-white rounded-full overflow-hidden h-14 shadow-md hover:shadow-lg transition ring-1 ring-transparent focus-within:ring-2 focus-within:ring-green-500">
+                {/* Category Dropdown Trigger */}
+                <button
+                  ref={categoryBtnRef}
+                  type="button"
+                  aria-haspopup="listbox"
+                  aria-expanded={showCategoryDropdown}
+                  onClick={() => setShowCategoryDropdown(v => !v)}
+          className="group px-6 flex items-center gap-2 text-xs font-medium text-gray-600 hover:bg-green-50 focus:outline-none transition h-full"
                 >
-                  {selectedCategory}
-                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  <span className="truncate max-w-[140px] text-left">{selectedCategory}</span>
+                  <svg
+                    className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${showCategoryDropdown ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
-                
-                {/* Dropdown Menu */}
-                {showCategoryDropdown && (
-                  <div className="absolute top-full left-0 w-48 bg-white border border-gray-200 shadow-lg z-10">
-                    {categories.map(category => (
-                      <button
-                        key={category}
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 text-gray-700"
-                        onClick={() => {
-                          setSelectedCategory(category);
-                          setShowCategoryDropdown(false);
-                        }}
-                      >
-                        {category}
-                      </button>
-                    ))}
+
+                {/* Divider */}
+                <div className="self-stretch w-px bg-green-100" />
+
+                {/* Input */}
+                <div className="flex-1 flex items-center h-full">
+                  <input
+                    type="text"
+                    placeholder="Search products, categories..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    className="w-full bg-transparent px-4 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none"
+                    aria-label="Search products"
+                  />
+                </div>
+
+                {/* Search Button */}
+                <button
+                  type="button"
+                  onClick={handleSearch}
+                  className="m-1 ml-0 rounded-full bg-green-600 hover:bg-green-700 active:bg-green-800 text-white px-6 flex items-center justify-center gap-1 text-sm font-medium transition h-[calc(100%-8px)]"
+                  aria-label="Search"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z" />
+                  </svg>
+                  <span className="hidden sm:inline">Search</span>
+                </button>
+              </div>
+
+              {/* Dropdown */}
+              {showCategoryDropdown && (
+                <div
+                  ref={dropdownRef}
+                  className="absolute z-20 mt-2 w-64 bg-white rounded-xl border border-gray-100 shadow-xl py-2 px-1 animate-fadeIn"
+                >
+                  <div className="max-h-72 overflow-y-auto thin-scroll pr-1">
+                    {categories.map(category => {
+                      const active = category === selectedCategory;
+                      return (
+                        <button
+                          key={category}
+                          type="button"
+                          role="option"
+                          aria-selected={active}
+                          onClick={() => { setSelectedCategory(category); setShowCategoryDropdown(false); }}
+                          className={`w-full flex items-center justify-between text-left text-sm rounded-md px-3 py-2 mb-1 last:mb-0 transition group ${active ? 'bg-green-50 text-green-700 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
+                        >
+                          <span className="truncate">{category}</span>
+                          {active && (
+                            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
-              
-              {/* Search Input */}
-              <div className="flex-1 px-6 py-3">
-                <input
-                  type="text"
-                  placeholder="Search Products"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full text-neutral-400 text-xs font-normal font-['Inter'] outline-none"
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                />
-              </div>
-              
-              {/* Search Button */}
-              <button 
-                onClick={handleSearch}
-                className="px-6 py-3 bg-green-600 flex justify-center items-center hover:bg-green-700"
-              >
-                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                </svg>
-              </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -221,112 +437,7 @@ export default function Product() {
           </div>
 
           <div className="flex">
-            {/* Sidebar */}
-            <div className="w-72 p-6 space-y-6">
-              <div>
-                <h3 className="font-semibold mb-4 text-zinc-800 text-sm">Brand</h3>
-                <div className="space-y-3">
-                  {(showMore.brand ? brandOptions : brandOptions.slice(0, 4)).map((b) => (
-                    <div key={b} className="flex items-center gap-3 cursor-pointer" onClick={() => handleFilterChange('brand', b)}>
-                      <CheckBox active={filters.brand === b} />
-                      <span className={`text-sm font-medium ${filters.brand === b ? "text-zinc-800" : "text-neutral-400"}`}>{b}</span>
-                    </div>
-                  ))}
-                </div>
-                {brandOptions.length > 4 && (
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      className="text-green-600 text-sm font-semibold hover:underline"
-                      onClick={() => setShowMore((s) => ({ ...s, brand: !s.brand }))}
-                    >
-                      {showMore.brand ? 'View less' : 'View more'}
-                    </button>
-                  </div>
-                )}
-              </div>
-              
-              <div>
-                <h3 className="font-semibold mb-4 text-zinc-800 text-sm">Shipped From</h3>
-                <div className="space-y-3">
-                  {(showMore.shippedFrom ? shippedFromOptions : shippedFromOptions.slice(0, 4)).map((loc) => (
-                    <div key={loc} className="flex items-center gap-3 cursor-pointer" onClick={() => handleFilterChange('shippedFrom', loc)}>
-                      <CheckBox active={filters.shippedFrom === loc} />
-                      <span className={`text-sm font-medium ${filters.shippedFrom === loc ? "text-zinc-800" : "text-neutral-400"}`}>{loc}</span>
-                    </div>
-                  ))}
-                </div>
-                {shippedFromOptions.length > 4 && (
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      className="text-green-600 text-sm font-semibold hover:underline"
-                      onClick={() => setShowMore((s) => ({ ...s, shippedFrom: !s.shippedFrom }))}
-                    >
-                      {showMore.shippedFrom ? 'View less' : 'View more'}
-                    </button>
-                  </div>
-                )}
-              </div>
-              
-              {/* <div>
-                <h3 className="font-semibold mb-4 text-zinc-800 text-sm">Volume</h3>
-                <div className="space-y-3">
-                  {(showMore.volume ? volumeOptions : volumeOptions.slice(0, 4)).map((v) => (
-                    <div key={v} className="flex items-center gap-3 cursor-pointer" onClick={() => handleFilterChange('volume', v)}>
-                      <CheckBox active={filters.volume === v} />
-                      <span className={`text-sm font-medium ${filters.volume === v ? "text-zinc-800" : "text-neutral-400"}`}>{v}</span>
-                    </div>
-                  ))}
-                </div>
-                {volumeOptions.length > 4 && (
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      className="text-green-600 text-sm font-semibold hover:underline"
-                      onClick={() => setShowMore((s) => ({ ...s, volume: !s.volume }))}
-                    >
-                      {showMore.volume ? 'View less' : 'View more'}
-                    </button>
-                  </div>
-                )}
-              </div> */}
-              
-              {/* <div>
-                <h3 className="font-semibold mb-4 text-zinc-800 text-sm">Size</h3>
-                <div className="space-y-3">
-                  {(showMore.size ? sizeOptions : sizeOptions.slice(0, 4)).map((s) => (
-                    <div key={s} className="flex items-center gap-3 cursor-pointer" onClick={() => handleFilterChange('size', s)}>
-                      <CheckBox active={filters.size === s} />
-                      <span className={`text-sm font-medium ${filters.size === s ? "text-zinc-800" : "text-neutral-400"}`}>{s}</span>
-                    </div>
-                  ))}
-                </div>
-                {sizeOptions.length > 4 && (
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      className="text-green-600 text-sm font-semibold hover:underline"
-                      onClick={() => setShowMore((s) => ({ ...s, size: !s.size }))}
-                    >
-                      {showMore.size ? 'View less' : 'View more'}
-                    </button>
-                  </div>
-                )}
-              </div> */}
-              
-              {/* <div>
-                <h3 className="font-semibold mb-4 text-zinc-800 text-sm">Rating</h3>
-                <div className="space-y-3">
-                  {[5, 4, 3, 2, 1].map(r => (
-                    <div key={r} className="flex items-center gap-3 cursor-pointer" onClick={() => handleFilterChange('rating', r)}>
-                      <CheckBox active={filters.rating === r} />
-                      <StarRating value={r} />
-                    </div>
-                  ))}
-                </div>
-              </div> */}
-            </div>
+            {/* Sidebar removed: category filter handled in top bar only */}
 
             {/* Products */}
             <div className="flex-1 p-6 pb-20">
@@ -337,13 +448,15 @@ export default function Product() {
                       <ProductCard
                         key={p.id}
                         imageSrc={p.image}
-                        storeName="BD Store"
                         name={p.name}
                         price={p.price}
-                        originalPrice={p.price + 50}
-                        inStock={true}
+                        brand={p.brand}
+                        category={p.category}
                         to={`/product/${p.id}`}
                         compact
+                        showOrderButton={currentUser?.role === 'shop_owner'}
+                        onOrder={openOrderModal}
+                        product={p}
                       />
                     ))}
                   </div>
@@ -356,11 +469,11 @@ export default function Product() {
                         image={p.image}
                         name={p.name}
                         brand={p.brand}
+                        category={p.category}
                         price={p.price}
-                        rating={p.rating}
-                        volume={p.volume}
-                        size={p.size}
-                        shippedFrom={p.shippedFrom}
+                        showOrderButton={currentUser?.role === 'shop_owner'}
+                        onOrder={openOrderModal}
+                        product={p}
                       />
                     ))}
                   </div>
@@ -382,6 +495,118 @@ export default function Product() {
 
         </div>
       </div>
+
+      {/* Order Modal */}
+      {showOrderModal && selectedProduct && (
+        <div className="fixed inset-0  bg-opacity-40 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-gray-100 transform transition-all duration-300 scale-100">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Place Order</h3>
+              <button
+                onClick={closeOrderModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                disabled={orderLoading}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <div className="flex items-center gap-3 mb-3">
+                <img
+                  src={selectedProduct.image}
+                  alt={selectedProduct.name}
+                  className="w-16 h-16 object-cover rounded-lg"
+                  onError={(e) => {
+                    e.target.src = '/api/placeholder/64/64';
+                  }}
+                />
+                <div>
+                  <h4 className="font-semibold text-gray-900">{selectedProduct.name}</h4>
+                  <p className="text-sm text-gray-500">{selectedProduct.brand}</p>
+                  <p className="text-lg font-bold text-green-600">৳{selectedProduct.price}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mb-2">
+                Quantity
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setOrderQuantity(Math.max(1, orderQuantity - 1))}
+                  className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                  disabled={orderLoading || orderQuantity <= 1}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
+                  </svg>
+                </button>
+                <input
+                  id="quantity"
+                  type="number"
+                  min="1"
+                  value={orderQuantity}
+                  onChange={(e) => setOrderQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-20 text-center border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  disabled={orderLoading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setOrderQuantity(orderQuantity + 1)}
+                  className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                  disabled={orderLoading}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-6 p-3 bg-gray-50 rounded-lg">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Total Amount:</span>
+                <span className="text-lg font-bold text-green-600">
+                  ৳{(selectedProduct.price * orderQuantity).toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={closeOrderModal}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={orderLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handlePlaceOrder}
+                disabled={orderLoading}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {orderLoading ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Placing Order...
+                  </>
+                ) : (
+                  'Confirm Order'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

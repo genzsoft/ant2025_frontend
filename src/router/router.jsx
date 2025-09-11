@@ -13,6 +13,7 @@ import Auth from "../page/Auth";
 import Profile from "../page/Profile";
 import ProductDetails from "../page/ProductDetails";
 import Myshop from "../page/Myshop";
+import ViewInShop from "../page/ViewInShop";
 
 
 export const router = createBrowserRouter([
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
   { path: "/home2", element: <Home2></Home2> },
   { path: "/product", element: <Product /> },
   { path: "/product/:id", element: <ProductDetails /> },
+  { path: "/view-in-shop/:id", element: <ViewInShop /> },
   { path: "/recharge", element: <Recharge /> },
   { path: "/shops", element: <Shops /> },
   { path: "/shops/:id", element: <ShopDetails /> },

@@ -2,10 +2,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { getCurrentUser, isAuthenticated } from '../../utils/auth.js';
+import { useSiteSettings } from '../../config/sitesetting.js';
 
 function Navbar() {
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState(null);
+  const settings = useSiteSettings();
+
+  const resolveAsset = (url, fallback) => {
+    if (!url) return fallback;
+    if (/^https?:/i.test(url)) return url;
+    return `${window._env_?.BASE_URL || ''}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
 
   // Check for user login status
   useEffect(() => {
@@ -58,6 +66,8 @@ function Navbar() {
         { label: 'Product', to: '/product' },
         { label: 'Recharge', to: '/recharge' },
         { label: 'My Shop', to: '/myshop' },
+              { label: 'Shops', to: '/shops' },
+
         ...baseItems
       ];
     }
@@ -83,7 +93,12 @@ function Navbar() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
-            <img className="w-10 h-10 rounded" src="/ant.png" alt="ANT logo" />
+            <img
+              className="w-10 h-10 rounded object-contain bg-transparent"
+              src={resolveAsset(settings?.logo, '/ant.png')}
+              alt="ANT logo"
+              onError={(e) => { e.currentTarget.src = '/ant.png'; }}
+            />
             <span className="sr-only">ANT</span>
           </Link>
 

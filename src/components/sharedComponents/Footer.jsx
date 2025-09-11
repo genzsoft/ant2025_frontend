@@ -1,7 +1,16 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useSiteSettings } from '../../config/sitesetting.js';
 
 const Footer = () => {
+  const settings = useSiteSettings();
+
+  const resolveAsset = (url, fallback) => {
+    if (!url) return fallback;
+    if (/^https?:/i.test(url)) return url;
+    return `${window._env_?.BASE_URL || ''}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+
   return (
     <footer className="bg-white ">
       <div className="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8 py-12">
@@ -9,10 +18,10 @@ const Footer = () => {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-2">
-              <img src="/ant.png" alt="ANT" className="h-12 w-12 rounded" />
+              <img src={resolveAsset(settings?.logo, '/ant.png')} alt="ANT" className="h-12 w-12 rounded object-contain" onError={(e)=>{e.currentTarget.src='/ant.png';}} />
             </div>
             <p className="mt-4 text-gray-700">
-              ANT enhances your customer service, sales, and marketing efforts with intuitive features that anyone can use.
+              {settings?.footer_short_description || 'ANT enhances your customer service, sales, and marketing efforts with intuitive features that anyone can use.'}
             </p>
             <div className="mt-4 flex items-center gap-2">
               <a href="#" aria-label="Facebook" className="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200">
@@ -64,7 +73,7 @@ const Footer = () => {
         <hr className="my-8 border-neutral-500" />
 
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-gray-700 text-sm">
-          <p>© ant.com. All rights reserved.</p>
+          <p>© {settings?.copyright_text || 'ant.com. All rights reserved.'}</p>
           <div className="flex items-center gap-6">
             <Link to="#" className="hover:text-green-600">Terms & conditions</Link>
             <Link to="#" className="hover:text-green-600">Privacy policy</Link>
@@ -74,6 +83,12 @@ const Footer = () => {
         {/* Bengali credit line */}
         <div className="mt-3 w-full text-center text-black text-lg font-normal font-['Hind_Siliguri']">
           প্রযুক্তিক সহযোগিতায়: GenzSoft.Cloud
+          {settings?.contact_phone && (
+            <div className="mt-1 text-sm text-gray-600">Contact: {settings.contact_phone}</div>
+          )}
+          {settings?.address && (
+            <div className="mt-1 text-sm text-gray-600">Address: {settings.address}</div>
+          )}
         </div>
       </div>
     </footer>

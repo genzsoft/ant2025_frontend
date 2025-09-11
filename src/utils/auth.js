@@ -98,8 +98,35 @@ export const removeTokens = () => {
   try {
     localStorage.removeItem('authTokens');
     localStorage.removeItem('user');
+    localStorage.removeItem('shopData');
   } catch (error) {
     console.error('Error removing tokens:', error);
+  }
+};
+
+/**
+ * Store shop data in localStorage
+ * @param {object} shopData - Shop data object
+ */
+export const storeShopData = (shopData) => {
+  try {
+    localStorage.setItem('shopData', JSON.stringify(shopData));
+  } catch (error) {
+    console.error('Error storing shop data:', error);
+  }
+};
+
+/**
+ * Get stored shop data from localStorage
+ * @returns {object|null} - Shop data or null if not found
+ */
+export const getStoredShopData = () => {
+  try {
+    const shopData = localStorage.getItem('shopData');
+    return shopData ? JSON.parse(shopData) : null;
+  } catch (error) {
+    console.error('Error getting stored shop data:', error);
+    return null;
   }
 };
 

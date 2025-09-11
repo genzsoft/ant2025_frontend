@@ -1,6 +1,30 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import ProductCard from '../components/productCard.jsx';
+import { fetchProducts, getCachedProducts } from '../api/products.js';
 
 function Home2() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    // Show cached instantly if available
+    const cached = getCachedProducts(5);
+    if (cached) {
+      setProducts(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
+    fetchProducts(5).then(list => {
+      if (!mounted) return;
+      setProducts(list);
+      setLoading(false);
+    });
+    return () => { mounted = false; };
+  }, []);
+
   return (
     <section className="min-h-[80vh] py-8 px-4 md:px-6">
       <div className="max-w-7xl mx-auto">
@@ -50,6 +74,26 @@ function Home2() {
 
 
           </div>
+        </div>
+        <div className="mt-20 mb-20">
+          {loading ? (
+            <div className="text-sm text-gray-500">Loading products...</div>
+          ) : products.length === 0 ? (
+            <div className="text-sm text-gray-500">No products found.</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+              {products.map((p) => (
+                <ProductCard
+                  key={p.id}
+                  imageSrc={p.image || '/api/placeholder/300/300'}
+                  name={p.name}
+                  price={parseFloat(p.price) || 0}
+                  to={`/product/${p.id}`}
+                  compact
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Recent Orders Table */}

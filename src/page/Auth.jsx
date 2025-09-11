@@ -6,7 +6,8 @@ import {
   getUserRole, 
   getUserId, 
   isAuthenticated, 
-  getCurrentUser 
+  getCurrentUser,
+  storeShopData
 } from '../utils/auth.js';
 
 export default function Auth() {
@@ -184,6 +185,34 @@ export default function Auth() {
     }
   };
 
+  const fetchShopData = async (accessToken) => {
+    try {
+      console.log('Fetching shop data with token:', accessToken);
+      
+      const response = await fetch('https://admin.ant2025.com/api/my-shop/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      const data = await response.json();
+      
+      console.log('Shop Data Response Status:', response.status);
+      console.log('Shop Data Response:', data);
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch shop data');
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Fetch Shop Data Error:', error);
+      throw new Error(error.message || 'Network error occurred');
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -339,6 +368,22 @@ export default function Auth() {
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
       
+      // If user is shop owner, fetch and store shop data
+      if (userRole === 'shop_owner') {
+        try {
+          console.log('User is shop owner, fetching shop data...');
+          const shopResponse = await fetchShopData(response.access);
+          
+          if (shopResponse && shopResponse.shop) {
+            console.log('Shop data fetched successfully:', shopResponse.shop);
+            storeShopData(shopResponse.shop);
+          }
+        } catch (shopError) {
+          console.error('Failed to fetch shop data:', shopError);
+          // Don't fail the login if shop data fetch fails
+        }
+      }
+      
       // Dispatch custom event for navbar update
       window.dispatchEvent(new CustomEvent('userStatusChanged'));
       
@@ -356,7 +401,7 @@ export default function Auth() {
       
       // Redirect based on user role
       if (userRole === 'shop_owner') {
-        navigate('/home2');
+        navigate('/myshop');
       } else {
         navigate('/');
       }
@@ -401,7 +446,7 @@ export default function Auth() {
   useEffect(() => {
     if (user) {
       if (user.role === 'shop_owner') {
-        navigate('/home2');
+        navigate('/myshop');
       } else {
         navigate('/');
       }

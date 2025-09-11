@@ -241,7 +241,7 @@ export default function Contact() {
       </div>
 
       {/* Google Map Section */}
-      <div className="mt-8 md:mt-12 w-full max-w-[966px] px-4 md:px-0">
+      {/* <div className="mt-8 md:mt-12 w-full max-w-[966px] px-4 md:px-0">
         <div className="text-center mb-6 md:mb-8">
         </div>
         <div className="w-full bg-white rounded-sm shadow-[0px_0px_8px_4px_rgba(0,0,0,0.06)] p-4 md:p-6 overflow-hidden">
@@ -263,7 +263,7 @@ export default function Contact() {
             />
           </div>
         </div>
-      </div>
+      </div> */}
 
     </section>
   );
