@@ -4,6 +4,9 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { getCurrentUser, isAuthenticated, removeTokens } from '../utils/auth.js';
 import { Api_Base_Url } from '../config/api.js';
+import TradeTransaction from '../components/transaction/Tradetransaction.jsx';
+import WalletTransaction from '../components/transaction/WalletTraansaction.jsx';
+import CurrencyTransaction from '../components/transaction/CurrencyTransaction.jsx';
 
 export default function Profile() {
   const [user, setUser] = useState(null);           // Auth info (id, role, tokens)
@@ -36,45 +39,16 @@ export default function Profile() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = React.useRef(null);
   const navigate = useNavigate();
-
-  // Trade transactions state & logic
-  const [tradeTx, setTradeTx] = useState([]);
-  const [tradeLoading, setTradeLoading] = useState(false);
-  const [tradeError, setTradeError] = useState('');
-  const [tradePage, setTradePage] = useState(1);
-  const [tradeNext, setTradeNext] = useState(null);
-  const [tradeCount, setTradeCount] = useState(0);
-
-  const fetchTradeTransactions = useCallback(async ({ reset=false } = {}) => {
-    if (!user?.accessToken) return;
-    try {
-      setTradeError('');
-      setTradeLoading(true);
-      const url = `${Api_Base_Url}/api/trade-transactions/?page=${tradePage}`;
-      const res = await axios.get(url, { headers: { 'Authorization': `Bearer ${user.accessToken}`, 'Accept': 'application/json' } });
-  const { results = [], next = null, /* previous unused */ count = 0 } = res.data || {};
-      setTradeCount(count);
-      setTradeNext(next);
-      setTradeTx(prev => reset ? results : [...prev, ...results]);
-    } catch (err) {
-      console.error('[Profile.jsx] Failed to fetch trade transactions', err);
-      setTradeError('Failed to load trade transactions');
-    } finally {
-      setTradeLoading(false);
-    }
-  }, [user?.accessToken, tradePage]);
-
-  useEffect(() => {
-    if (activeSection === 'transactions') {
-      fetchTradeTransactions({ reset: tradePage === 1 });
-    }
-  }, [activeSection, tradePage, fetchTradeTransactions]);
-
-  const handleLoadMoreTrade = () => { if (tradeNext && !tradeLoading) setTradePage(p => p + 1); };
-  const handleRefreshTrade = () => { setTradePage(1); setTradeTx([]); fetchTradeTransactions({ reset: true }); };
+  // Change password state
+  const [pw1, setPw1] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [pwShow1, setPwShow1] = useState(false);
+  const [pwShow2, setPwShow2] = useState(false);
+  const [changingPw, setChangingPw] = useState(false);
+  // Transactions tab selection
+  const [transactionTab, setTransactionTab] = useState('trade');
 
   // Fetch profile from backend
-
   const fetchProfile = useCallback(async (accessToken) => {
     try {
       setError('');
@@ -84,10 +58,8 @@ export default function Profile() {
           'Accept': 'application/json'
         }
       });
-      console.log('[Profile.jsx] Fetched profile:', response.data);
       setProfile(response.data);
       setOriginalProfile(response.data);
-      // Initialize form state
       setFormData({
         name: response.data.name || '',
         email: response.data.email || '',
@@ -97,7 +69,6 @@ export default function Profile() {
         district: response.data.district || '',
         upazila: response.data.upazila || ''
       });
-    // Location preselection now handled by chained effects once lists load
       localStorage.setItem('userProfile', JSON.stringify(response.data));
     } catch (err) {
       console.error('[Profile.jsx] Error fetching profile:', err);
@@ -133,7 +104,6 @@ export default function Profile() {
         if (match) {
           setSelectedDistrictId(match.id.toString());
           setFormData(prev => ({ ...prev, district: match.name }));
-    // Upazila preselect deferred to effect
         }
       }
     } catch (err) {
@@ -165,44 +135,6 @@ export default function Profile() {
       setLoadingUpazilas(false);
     }
   }, []);
-
-  // Preselect division after both profile and divisions load (first render or refetch)
-  useEffect(() => {
-    if (!profile?.division || !divisions.length) return;
-    if (selectedDivisionId) return; // already selected (user changed or preselected)
-    const divisionMatch = divisions.find(d => d.name === profile.division);
-    if (divisionMatch) {
-      setSelectedDivisionId(divisionMatch.id.toString());
-      setFormData(prev => ({ ...prev, division: divisionMatch.name }));
-      // Fetch districts with intention to preselect
-      fetchDistricts(divisionMatch.id, profile.district);
-    }
-  }, [profile, divisions, selectedDivisionId, fetchDistricts]);
-
-  // Preselect district after districts load
-  useEffect(() => {
-    if (!profile?.district || !districts.length) return;
-    if (selectedDistrictId) return;
-    const distMatch = districts.find(d => d.name === profile.district);
-    if (distMatch) {
-      setSelectedDistrictId(distMatch.id.toString());
-      setFormData(prev => ({ ...prev, district: distMatch.name }));
-      fetchUpazilas(distMatch.id, profile.upazila);
-    }
-  }, [profile, districts, selectedDistrictId, fetchUpazilas]);
-
-  // Preselect upazila after upazilas load
-  useEffect(() => {
-    if (!profile?.upazila || !upazilas.length) return;
-    if (selectedUpazilaId) return;
-    const upMatch = upazilas.find(u => u.name === profile.upazila);
-    if (upMatch) {
-      setSelectedUpazilaId(upMatch.id.toString());
-      setFormData(prev => ({ ...prev, upazila: upMatch.name }));
-    }
-  }, [profile, upazilas, selectedUpazilaId]);
-
-  // Initial divisions load
   useEffect(() => {
     fetchDivisions();
   }, [fetchDivisions]);
@@ -399,6 +331,38 @@ export default function Profile() {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (!user) { toast.error('Not authenticated'); return; }
+    if (!pw1 || !pw2) { toast.error('Enter both password fields'); return; }
+    if (pw1 !== pw2) { toast.error('Passwords do not match'); return; }
+    setChangingPw(true);
+    try {
+      const res = await axios.post(`${Api_Base_Url}/auth/password/change/`, {
+        new_password1: pw1,
+        new_password2: pw2
+      }, {
+        headers: { 'Authorization': `Bearer ${user.accessToken}`, 'Content-Type': 'application/json' }
+      });
+      const msg = typeof res.data === 'string' ? res.data : (res.data?.detail || 'Password updated');
+      toast.success(msg);
+      setPw1('');
+      setPw2('');
+    } catch (err) {
+      console.error('[Profile.jsx] Password change error:', err);
+      let message = 'Failed to change password';
+      const data = err.response?.data;
+      if (data) {
+        if (typeof data === 'string') message = data;
+        else if (Array.isArray(data)) message = data.join(', ');
+        else if (data.detail) message = data.detail;
+        else message = Object.entries(data).map(([k,v]) => `${k}: ${Array.isArray(v)? v.join(', '): v}`).join('\n');
+      }
+      toast.error(message);
+    } finally {
+      setChangingPw(false);
+    }
+  };
+
   const sidebarItems = [
     { id: 'account', label: 'Account info', icon: '👤' },
     { id: 'orders', label: 'My order', icon: '📦' },
@@ -434,10 +398,11 @@ export default function Profile() {
   return (
     <section className="min-h-[80vh] py-8 px-4 md:px-6 bg-stone-100">
       <div className="max-w-[1360px] mx-auto">
-        <div className="bg-stone-100 rounded-[10px] p-8 min-h-[863px] relative">
-          
-          {/* Sidebar revamped */}
-          <div className="w-72 min-h-[640px] absolute left-[30px] top-[20px] bg-neutral-50 rounded-xl p-5 flex flex-col">
+        <div className="bg-stone-100 rounded-[10px] p-4 md:p-8">
+          {/* Responsive container: stack on mobile, side-by-side on md+ */}
+          <div className="flex flex-col md:flex-row gap-6">
+          {/* Sidebar */}
+          <div className="md:w-72 w-full md:min-h-[640px] bg-neutral-50 rounded-xl p-5 flex flex-col">
             <div className="relative group mb-4">
               <div className="w-full aspect-[214/220] bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center border border-gray-200">
                 <img
@@ -493,7 +458,7 @@ export default function Profile() {
           </div>
 
           {/* Main Content Area */}
-          <div className="ml-[350px] mt-[20px] pr-6">
+          <div className="flex-1 md:mt-0 mt-6 md:pr-6">
             {activeSection === 'account' && (
               <>
                 {/* Page Title */}
@@ -811,168 +776,106 @@ export default function Profile() {
 
             {activeSection === 'transactions' && (
               <>
-                <div className="text-black text-2xl font-bold font-['Inter'] capitalize leading-7 mb-8">
+                <div className="text-black text-2xl font-bold font-['Inter'] capitalize leading-7 mb-6">
                   My Transaction
                 </div>
-                {/* Trade Transactions Dynamic List */}
-                <div className="mb-10">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                      <span className="inline-block px-3 py-1 rounded-full bg-green-600 text-white text-xs font-medium">Trade</span>
-                      <span className="text-gray-500 font-normal">Transactions</span>
-                    </h4>
-                    <div className="flex items-center gap-2">
-                      <button onClick={handleRefreshTrade} className="text-xs px-3 py-1 rounded bg-white border border-gray-200 hover:bg-gray-50">Refresh</button>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    {tradeError && (
-                      <div className="p-3 rounded bg-red-50 text-red-600 text-sm flex items-start justify-between">
-                        <span>{tradeError}</span>
-                        <button onClick={handleRefreshTrade} className="underline ml-2">Retry</button>
-                      </div>
-                    )}
-                    {!tradeError && (
-                      <div className="text-xs text-gray-500">Total: {tradeCount}</div>
-                    )}
-                    {tradeTx.map((tx, idx) => {
-                      const productName = tx.product_display?.split('|')?.[0]?.trim() || tx.product_display;
-                      return (
-                        <div key={idx} className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 flex flex-col gap-2 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-gray-800">{productName}</span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 uppercase tracking-wide">{tx.type || 'Trade'}</span>
-                          </div>
-                          <div className="text-gray-500 text-xs leading-snug">{tx.product_display}</div>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-                            <span>Qty: <strong className="text-gray-800">{tx.quantity}</strong></span>
-                            <span>Total: <strong className="text-gray-800">৳{tx.total_amount}</strong></span>
-                          </div>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-500">
-                            {tx.buyer_number && <span>Buyer: {tx.buyer_number}</span>}
-                            {tx.seller_number && <span>Seller: {tx.seller_number}</span>}
-                          </div>
-                          <div className="text-[11px] text-gray-400 flex items-center justify-between">
-                            <span>{tx.created_at}</span>
-                            {tx.shop_display && <span className="truncate max-w-[50%] text-right">{tx.shop_display}</span>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {!tradeLoading && tradeTx.length === 0 && !tradeError && (
-                      <div className="text-center py-10 text-sm text-gray-500 bg-white rounded-lg border border-dashed">No trade transactions found.</div>
-                    )}
-                    {tradeLoading && (
-                      <div className="space-y-3">
-                        {Array.from({ length: 3 }).map((_, i) => (
-                          <div key={i} className="animate-pulse bg-white border border-gray-100 rounded-lg p-4 space-y-2">
-                            <div className="h-4 bg-gray-200 rounded w-1/2" />
-                            <div className="h-3 bg-gray-100 rounded w-5/6" />
-                            <div className="h-3 bg-gray-100 rounded w-2/3" />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {tradeNext && !tradeLoading && (
-                      <button onClick={handleLoadMoreTrade} className="w-full mt-2 py-2 text-sm font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50">Load More</button>
-                    )}
+                <div className="mb-4 overflow-x-auto">
+                  <div className="inline-flex whitespace-nowrap rounded-lg border border-gray-200 bg-white overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setTransactionTab('trade')}
+                      className={`px-4 py-2 text-sm font-medium transition ${transactionTab==='trade' ? 'bg-green-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >Trade</button>
+                    <button
+                      type="button"
+                      onClick={() => setTransactionTab('wallet')}
+                      className={`px-4 py-2 text-sm font-medium transition border-l border-gray-200 ${transactionTab==='wallet' ? 'bg-green-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >Wallet</button>
+                    <button
+                      type="button"
+                      onClick={() => setTransactionTab('currency')}
+                      className={`px-4 py-2 text-sm font-medium transition border-l border-gray-200 ${transactionTab==='currency' ? 'bg-green-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >Currency</button>
                   </div>
                 </div>
-                
-                {/* Transaction Table */}
-                <div className="bg-white rounded-lg overflow-hidden shadow-sm">
-                  {/* Table Header */}
-                  <div className="grid grid-cols-4 bg-gray-50 px-6 py-4 border-b border-gray-200">
-                    <div className="text-black text-base font-semibold font-['Inter']">Medium</div>
-                    <div className="text-black text-base font-semibold font-['Inter']">Date</div>
-                    <div className="text-black text-base font-semibold font-['Inter']">Status</div>
-                    <div className="text-black text-base font-semibold font-['Inter']">Transaction Id</div>
-                  </div>
-                  
-                  {/* Transaction Rows */}
-                  <div className="divide-y divide-gray-100">
-                    <div className="grid grid-cols-4 px-6 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="text-black text-sm font-normal font-['Inter']">Bkash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">08/28/25</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">In Cash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">YY67G67HBSG</div>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 px-6 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="text-black text-sm font-normal font-['Inter']">Nagad</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">08/28/25</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">In Cash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">YY67G67HBSG</div>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 px-6 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="text-black text-sm font-normal font-['Inter']">Bkash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">08/28/25</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">Payment</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">YY67G67HBSG</div>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 px-6 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="text-black text-sm font-normal font-['Inter']">Bkash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">08/28/25</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">Bonus</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">YY67G67HBSG</div>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 px-6 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="text-black text-sm font-normal font-['Inter']">Bkash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">08/28/25</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">In Cash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">YY67G67HBSG</div>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 px-6 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="text-black text-sm font-normal font-['Inter']">Bkash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">08/28/25</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">In Cash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">YY67G67HBSG</div>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 px-6 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="text-black text-sm font-normal font-['Inter']">Bkash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">08/28/25</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">In Cash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">YY67G67HBSG</div>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 px-6 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="text-black text-sm font-normal font-['Inter']">Bkash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">08/28/25</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">In Cash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">YY67G67HBSG</div>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 px-6 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="text-black text-sm font-normal font-['Inter']">Bkash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">08/28/25</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">In Cash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">YY67G67HBSG</div>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 px-6 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="text-black text-sm font-normal font-['Inter']">Bkash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">08/28/25</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">In Cash</div>
-                      <div className="text-black text-sm font-normal font-['Inter']">YY67G67HBSG</div>
-                    </div>
-                  </div>
-                </div>
+                {transactionTab === 'trade' && (
+                  <TradeTransaction token={user?.accessToken} />
+                )}
+                {transactionTab === 'wallet' && (
+                  <WalletTransaction token={user?.accessToken} />
+                )}
+                {transactionTab === 'currency' && (
+                  <CurrencyTransaction token={user?.accessToken} />
+                )}
               </>
             )}
 
             {activeSection === 'password' && (
-              <div className="text-black text-2xl font-bold font-['Inter'] capitalize leading-7">
-                Change Password
-                <p className="text-gray-600 text-base font-normal mt-4">Update your account password here.</p>
+              <div>
+                <div className="text-black text-2xl font-bold font-['Inter'] capitalize leading-7 mb-6">
+                  Change Password
+                  <p className="text-gray-600 text-base font-normal mt-2">Update your account password here.</p>
+                </div>
+
+                <div className="max-w-lg bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                  {/* New Password */}
+                  <div className="mb-5">
+                    <label className="mb-1 block text-black text-sm font-normal">New password</label>
+                    <div className="relative">
+                      <input
+                        type={pwShow1 ? 'text' : 'password'}
+                        value={pw1}
+                        onChange={(e) => setPw1(e.target.value)}
+                        className="w-full h-11 px-3 pr-20 bg-white rounded-md border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="Enter new password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setPwShow1((s) => !s)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                      >{pwShow1 ? 'Hide' : 'Show'}</button>
+                    </div>
+                  </div>
+
+                  {/* Confirm Password */}
+                  <div className="mb-5">
+                    <label className="mb-1 block text-black text-sm font-normal">Confirm new password</label>
+                    <div className="relative">
+                      <input
+                        type={pwShow2 ? 'text' : 'password'}
+                        value={pw2}
+                        onChange={(e) => setPw2(e.target.value)}
+                        className="w-full h-11 px-3 pr-20 bg-white rounded-md border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="Re-enter new password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setPwShow2((s) => !s)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                      >{pwShow2 ? 'Hide' : 'Show'}</button>
+                    </div>
+                    {pw1 && pw2 && pw1 !== pw2 && (
+                      <p className="mt-1 text-xs text-red-600">Passwords do not match.</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleChangePassword}
+                      disabled={changingPw || !pw1 || !pw2 || pw1 !== pw2}
+                      className={`h-11 px-6 rounded-lg text-white text-sm font-semibold transition ${changingPw || !pw1 || !pw2 || pw1 !== pw2 ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+                    >{changingPw ? 'Updating...' : 'Update Password'}</button>
+                    <button
+                      type="button"
+                      onClick={() => { setPw1(''); setPw2(''); }}
+                      className="h-11 px-4 rounded-lg border text-sm bg-white hover:bg-gray-50"
+                    >Clear</button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
-
+          </div>
           {/* Legacy absolute logout removed (moved into sidebar) */}
         </div>
       </div>

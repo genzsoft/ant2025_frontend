@@ -374,7 +374,7 @@ function Myshop() {
               </div>
 
               {/* Recent Performance */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-blue-50 rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -430,7 +430,9 @@ function Myshop() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </div> */}
+
+
             </div>
           )}
 
@@ -440,9 +442,7 @@ function Myshop() {
                 <h2 className="text-xl font-bold text-gray-900">
                   Products ({totalProducts})
                 </h2>
-                <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors">
-                  Add New Product
-                </button>
+
               </div>
 
               {productsLoading ? (

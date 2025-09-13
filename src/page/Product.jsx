@@ -427,14 +427,7 @@ export default function Product() {
                   </svg>
                 </button>
               </div>
-              <div className="flex justify-start items-center gap-4">
-                <div className="px-4 py-2 border border-zinc-100">
-                  <div className="text-stone-500 text-xs font-medium font-['Inter']">Latest</div>
-                </div>
-                <div className="px-4 py-2 border border-zinc-100">
-                  <div className="text-stone-500 text-xs font-medium font-['Inter']">30</div>
-                </div>
-              </div>
+
             </div>
           </div>
 
