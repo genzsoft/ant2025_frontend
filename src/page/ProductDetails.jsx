@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { Api_Base_Url } from '../config/api';
 import { isAuthenticated, getCurrentUser } from '../utils/auth.js';
-import ScanbotSDK from 'scanbot-web-sdk/ui';
+import QRScanner from '../components/QRScanner';
 
 export default function ProductDetails() {
     const [product, setProduct] = useState(null);
@@ -20,6 +20,9 @@ export default function ProductDetails() {
     const [orderLoading, setOrderLoading] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
 
+    // QR Scanner state
+    const [showQRScanner, setShowQRScanner] = useState(false);
+
     // Hold-to-confirm state
     const [showHold, setShowHold] = useState(false);
     const [holdProgress, setHoldProgress] = useState(0); // 0-100
@@ -31,7 +34,6 @@ export default function ProductDetails() {
 
     const params = useParams();
     const navigate = useNavigate();
-    const sdkInitializedRef = useRef(false);
 
     // Images will come from API (product.images); keep a safe fallback
     const productImages = Array.isArray(product?.images) && product.images.length
@@ -77,25 +79,6 @@ export default function ProductDetails() {
         }
     }, []);
 
-    // Initialize Scanbot SDK once (trial mode by default)
-    useEffect(() => {
-        let mounted = true;
-        const init = async () => {
-            if (sdkInitializedRef.current) return;
-            try {
-                await ScanbotSDK.initialize({
-                    licenseKey: "", // optional: leave empty for 60s per session trial
-                    enginePath: "/wasm/", // we copied wasm assets to public/wasm
-                });
-                if (mounted) sdkInitializedRef.current = true;
-            } catch (e) {
-                console.warn('Scanbot SDK init failed:', e);
-            }
-        };
-        init();
-        return () => { mounted = false; };
-    }, []);
-
     // Cleanup hold timer on unmount
     useEffect(() => {
         return () => {
@@ -103,73 +86,14 @@ export default function ProductDetails() {
         };
     }, []);
 
-    // Open barcode/QR scanner and navigate to scanned shop URL immediately
-    const startShopScanner = async () => {
-        try {
-            // Ensure SDK is initialized
-            if (!sdkInitializedRef.current) {
-                await ScanbotSDK.initialize({ licenseKey: "", enginePath: "/wasm/" });
-                sdkInitializedRef.current = true;
-            }
+    // Open QR scanner
+    const startShopScanner = () => {
+        setShowQRScanner(true);
+    };
 
-            const config = new ScanbotSDK.UI.Config.BarcodeScannerScreenConfiguration();
-
-            // Optional minimal UX tuning
-            config.userGuidance.title.text = "Point camera at the shop QR";
-            config.topBar.mode = "GRADIENT";
-
-            const result = await ScanbotSDK.UI.createBarcodeScanner(config);
-            if (result && result.items && result.items.length > 0) {
-                // Prefer first item text
-                const text = result.items[0]?.barcode?.text || result.items[0]?.text || "";
-                if (typeof text === 'string' && text.length > 0) {
-                    // Accept only URLs to our shops, fallback to try navigating if it's a valid http(s) URL
-                    const trimmed = text.trim();
-                    const isHttp = /^https?:\/\//i.test(trimmed);
-                    if (isHttp) {
-                        // If it's a relative path in the QR, normalize
-                        try {
-                            const url = new URL(trimmed, window.location.origin);
-                            // If it matches /shops/:id navigate within SPA, else fallback to full redirect
-                            const shopsMatch = url.pathname.match(/^\/shops\/(\d+)/);
-                            if (shopsMatch) {
-                                navigate(`/shops/${shopsMatch[1]}`);
-                            } else {
-                                // external or unexpected path -> hard redirect
-                                window.location.href = url.toString();
-                            }
-                            return;
-                        } catch {
-                            // If URL ctor fails, try SPA navigation directly
-                            navigate(trimmed);
-                            return;
-                        }
-                    }
-
-                    // If QR contains a relative path like /shops/6
-                    if (trimmed.startsWith('/shops/')) {
-                        navigate(trimmed);
-                        return;
-                    }
-
-                    // Last resort: try to extract shop id from plain text
-                    const idMatch = trimmed.match(/shops\/(\d+)/);
-                    if (idMatch) {
-                        navigate(`/shops/${idMatch[1]}`);
-                        return;
-                    }
-
-                    toast.error('Scanned code is not a valid shop link');
-                } else {
-                    toast.error('No readable QR content');
-                }
-            } else {
-                // Scanner closed without result — do nothing
-            }
-        } catch (err) {
-            console.error('Scanner error:', err);
-            toast.error('Failed to open scanner');
-        }
+    // Close QR scanner
+    const closeQRScanner = () => {
+        setShowQRScanner(false);
     };
     useEffect(() => {
         if (isAuthenticated()) {
@@ -966,6 +890,12 @@ export default function ProductDetails() {
                     </div>
                 </div>
             )}
+
+            {/* QR Scanner Modal */}
+            <QRScanner 
+                isOpen={showQRScanner}
+                onClose={closeQRScanner}
+            />
         </section>
     );
 }
