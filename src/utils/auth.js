@@ -189,7 +189,17 @@ export const loginUser = async (username, password) => {
     body: JSON.stringify(requestBody),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.message || data.detail || 'Login failed');
+  console.log(data);
+
+  if (!res.ok) {
+    console.log(res);
+    
+    let errorMessage = data.message || data.detail;
+    if (data.non_field_errors && Array.isArray(data.non_field_errors) && data.non_field_errors.length > 0) {
+      errorMessage = data.non_field_errors[0];
+    }
+    throw new Error(errorMessage);
+  }
   return data;
 };
 
