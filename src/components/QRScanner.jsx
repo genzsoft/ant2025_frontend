@@ -11,7 +11,6 @@ const QRScanner = ({ onClose, isOpen }) => {
     const handleUpdate = (err, result) => {
         if (result) {
             const scannedText = result.text;
-            console.log('QR Scanned:', scannedText);
             
             // Process the scanned result
             handleScannedResult(scannedText);

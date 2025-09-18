@@ -129,7 +129,6 @@ export default function Recharge() {
       if (!res.ok) {
 
         const msg = data?.detail || data?.message || JSON.stringify(data);
-        console.log('Cashin error response:', msg);
         
         // Clean up error message - remove brackets and quotes
         let cleanMsg = msg;
@@ -182,10 +181,7 @@ export default function Recharge() {
         amount: amountStr
       };
 
-      console.log('=== TOP UP REQUEST ===');
-      console.log('URL:', `${Api_Base_Url}/api/cashin/`);
-      console.log('Headers:', headers);
-      console.log('Request Body:', body);
+
 
       const res = await fetch(`${Api_Base_Url}/api/cashin/`, {
         method: 'POST',
@@ -193,16 +189,11 @@ export default function Recharge() {
         body: JSON.stringify(body)
       });
 
-      console.log('=== TOP UP RESPONSE ===');
-      console.log('Status:', res.status, res.statusText);
-      console.log('Response Headers:', Object.fromEntries(res.headers.entries()));
 
       const data = await res.json();
-      console.log('Response Data:', data);
 
       if (!res.ok) {
         const msg = data?.detail || data?.message || JSON.stringify(data);
-        console.log('Top Up error response:', msg);
         
         // Clean up error message - remove brackets and quotes
         let cleanMsg = msg;
@@ -215,7 +206,6 @@ export default function Recharge() {
       }
 
       // success
-      console.log('Top Up SUCCESS:', data);
       toast.success('Top Up submitted successfully');
       setSendForm({ account: '', amount: '' });
     } catch (err) {

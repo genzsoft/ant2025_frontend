@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import { Api_Base_Url } from '../config/api';
 import { isAuthenticated, getCurrentUser } from '../utils/auth.js';
 import QRScanner from '../components/QRScanner';
+import { ProductDetailsZoom } from './ProductDetailsZoom.jsx';
 
 export default function ProductDetails() {
     const [product, setProduct] = useState(null);
@@ -201,14 +202,10 @@ export default function ProductDetails() {
 
     // Direct order without modal (alternative approach)
     const handleDirectOrder = async () => {
-        console.log('🚀 [ProductDetails.jsx] DIRECT ORDER INITIATED');
-        console.log('📋 Current User:', currentUser);
-        console.log('🛍️ Product:', product);
-        console.log('🔢 Quantity:', _quantity);
+
 
         if (!currentUser || currentUser.role !== 'shop_owner') {
             console.error('❌ [ProductDetails.jsx] Authentication failed - Not a shop owner');
-            console.log('User role:', currentUser?.role);
             toast.error('Only shop owners can place orders');
             return;
         }
@@ -227,21 +224,16 @@ export default function ProductDetails() {
 
         try {
             setOrderLoading(true);
-            console.log('⏳ [ProductDetails.jsx] Setting loading state to true');
 
             // Get shop data from localStorage
             const shopDataRaw = localStorage.getItem('shopData');
-            console.log('🏪 [ProductDetails.jsx] Raw shop data from localStorage:', shopDataRaw);
 
             const shopData = JSON.parse(shopDataRaw || '{}');
-            console.log('🏪 [ProductDetails.jsx] Parsed shop data:', shopData);
 
             const shop_id = shopData.id;
-            console.log('🆔 [ProductDetails.jsx] Extracted shop_id:', shop_id);
 
             if (!shop_id) {
                 console.error('❌ [ProductDetails.jsx] Shop ID not found in localStorage');
-                console.log('Available shop data keys:', Object.keys(shopData));
                 toast.error('Shop information not found. Please refresh and try again.');
                 return;
             }
@@ -252,25 +244,13 @@ export default function ProductDetails() {
                 quantity: _quantity
             };
 
-            console.log('📦 [ProductDetails.jsx] Order payload prepared:', orderData);
-            console.log('📦 [ProductDetails.jsx] Payload format: shop (not shop_id), product (not product_id)');
 
             const endpoint = `${Api_Base_Url}/api/shop-orders/`;
-            console.log('🌐 [ProductDetails.jsx] API Endpoint:', endpoint);
-            console.log('🔑 [ProductDetails.jsx] Access Token:', currentUser.accessToken ? 'Present' : 'Missing');
-            console.log('🔑 [ProductDetails.jsx] Token Preview:', currentUser.accessToken ? `${currentUser.accessToken.substring(0, 20)}...` : 'N/A');
 
             const requestHeaders = {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${currentUser.accessToken}`
             };
-            console.log('📋 [ProductDetails.jsx] Request Headers:', requestHeaders);
-
-            console.log('📤 [ProductDetails.jsx] Sending API request...');
-            console.log('📤 [ProductDetails.jsx] Method: POST');
-            console.log('📤 [ProductDetails.jsx] URL:', endpoint);
-            console.log('📤 [ProductDetails.jsx] Headers:', requestHeaders);
-            console.log('📤 [ProductDetails.jsx] Body:', JSON.stringify(orderData, null, 2));
 
             const response = await axios.post(
                 endpoint,
@@ -280,19 +260,10 @@ export default function ProductDetails() {
                 }
             );
 
-            console.log('✅ [ProductDetails.jsx] API Response received');
-            console.log('📊 [ProductDetails.jsx] Response Status:', response.status);
-            console.log('📊 [ProductDetails.jsx] Response Status Text:', response.statusText);
-            console.log('📊 [ProductDetails.jsx] Response Headers:', response.headers);
-            console.log('📊 [ProductDetails.jsx] Response Data:', response.data);
-            console.log('📊 [ProductDetails.jsx] Full Response Object:', response);
-
             if (response.status === 200 || response.status === 201) {
-                console.log('🎉 [ProductDetails.jsx] Order placed successfully!');
                 toast.success(`Order placed successfully! Quantity: ${_quantity} x ${product.name}`);
                 // Reset quantity to 1 after successful order
                 _setQuantity(1);
-                console.log('🔄 [ProductDetails.jsx] Quantity reset to 1');
             } else {
                 console.error('❌ [ProductDetails.jsx] Unexpected response status:', response.status);
                 throw new Error('Order placement failed');
@@ -372,20 +343,13 @@ export default function ProductDetails() {
             }
         } finally {
             setOrderLoading(false);
-            console.log('🏁 [ProductDetails.jsx] Setting loading state to false');
-            console.log('🏁 [ProductDetails.jsx] Order process completed');
         }
     };
 
     const handlePlaceOrder = async () => {
-        console.log('🚀 [ProductDetails.jsx] MODAL ORDER INITIATED');
-        console.log('📋 Current User:', currentUser);
-        console.log('🛍️ Product:', product);
-        console.log('🔢 Quantity:', _quantity);
 
         if (!currentUser || currentUser.role !== 'shop_owner') {
             console.error('❌ [ProductDetails.jsx] Authentication failed - Not a shop owner');
-            console.log('User role:', currentUser?.role);
             toast.error('Only shop owners can place orders');
             return;
         }
@@ -404,21 +368,16 @@ export default function ProductDetails() {
 
         try {
             setOrderLoading(true);
-            console.log('⏳ [ProductDetails.jsx] Setting loading state to true');
 
             // Get shop data from localStorage
             const shopDataRaw = localStorage.getItem('shopData');
-            console.log('🏪 [ProductDetails.jsx] Raw shop data from localStorage:', shopDataRaw);
 
             const shopData = JSON.parse(shopDataRaw || '{}');
-            console.log('🏪 [ProductDetails.jsx] Parsed shop data:', shopData);
 
             const shop_id = shopData.id;
-            console.log('🆔 [ProductDetails.jsx] Extracted shop_id:', shop_id);
 
             if (!shop_id) {
                 console.error('❌ [ProductDetails.jsx] Shop ID not found in localStorage');
-                console.log('Available shop data keys:', Object.keys(shopData));
                 toast.error('Shop information not found. Please refresh and try again.');
                 return;
             }
@@ -429,25 +388,13 @@ export default function ProductDetails() {
                 quantity: _quantity
             };
 
-            console.log('📦 [ProductDetails.jsx] Order payload prepared:', orderData);
-            console.log('📦 [ProductDetails.jsx] Payload format: shop_id, product_id (original format)');
 
             const endpoint = `${Api_Base_Url}/api/place-order/`;
-            console.log('🌐 [ProductDetails.jsx] API Endpoint:', endpoint);
-            console.log('🔑 [ProductDetails.jsx] Access Token:', currentUser.accessToken ? 'Present' : 'Missing');
-            console.log('🔑 [ProductDetails.jsx] Token Preview:', currentUser.accessToken ? `${currentUser.accessToken.substring(0, 20)}...` : 'N/A');
 
             const requestHeaders = {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${currentUser.accessToken}`
             };
-            console.log('📋 [ProductDetails.jsx] Request Headers:', requestHeaders);
-
-            console.log('📤 [ProductDetails.jsx] Sending API request...');
-            console.log('📤 [ProductDetails.jsx] Method: POST');
-            console.log('📤 [ProductDetails.jsx] URL:', endpoint);
-            console.log('📤 [ProductDetails.jsx] Headers:', requestHeaders);
-            console.log('📤 [ProductDetails.jsx] Body:', JSON.stringify(orderData, null, 2));
 
             const response = await axios.post(
                 endpoint,
@@ -457,21 +404,12 @@ export default function ProductDetails() {
                 }
             );
 
-            console.log('✅ [ProductDetails.jsx] API Response received');
-            console.log('📊 [ProductDetails.jsx] Response Status:', response.status);
-            console.log('📊 [ProductDetails.jsx] Response Status Text:', response.statusText);
-            console.log('📊 [ProductDetails.jsx] Response Headers:', response.headers);
-            console.log('📊 [ProductDetails.jsx] Response Data:', response.data);
-            console.log('📊 [ProductDetails.jsx] Full Response Object:', response);
-
+  
             if (response.status === 200 || response.status === 201) {
-                console.log('🎉 [ProductDetails.jsx] Order placed successfully!');
                 toast.success(`Order placed successfully! Quantity: ${_quantity} x ${product.name}`);
                 closeOrderModal();
-                console.log('🔄 [ProductDetails.jsx] Order modal closed');
                 // Reset quantity to 1 after successful order
                 _setQuantity(1);
-                console.log('🔄 [ProductDetails.jsx] Quantity reset to 1');
             } else {
                 console.error('❌ [ProductDetails.jsx] Unexpected response status:', response.status);
                 throw new Error('Order placement failed');
@@ -551,8 +489,6 @@ export default function ProductDetails() {
             }
         } finally {
             setOrderLoading(false);
-            console.log('🏁 [ProductDetails.jsx] Setting loading state to false');
-            console.log('🏁 [ProductDetails.jsx] Order process completed');
         }
     };
 
@@ -567,11 +503,9 @@ export default function ProductDetails() {
                             {/* Main Image */}
                             <div className="relative border border-black rounded-lg overflow-hidden mb-4 bg-white">
                                 <div className="aspect-square flex items-center justify-center p-8">
-                                    <img
+                                    <ProductDetailsZoom
                                         src={productImages[selectedImage] || productImages[0] || 'https://placehold.co/600x600'}
                                         alt={product?.name || 'Product'}
-                                        className="max-w-full max-h-full object-contain"
-                                        onError={(e) => { e.currentTarget.src = 'https://placehold.co/600x600'; }}
                                     />
                                 </div>
                                 {/* NEW badge */}
@@ -579,6 +513,9 @@ export default function ProductDetails() {
                                     NEW
                                 </div>
                             </div>
+
+
+
 
                             {/* Thumbnail Images */}
                             <div className="flex gap-2 overflow-x-auto">

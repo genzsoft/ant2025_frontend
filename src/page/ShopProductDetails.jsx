@@ -5,6 +5,7 @@ import { Api_Base_Url } from '../config/api';
 import { isAuthenticated, getStoredTokens, getCurrentUser } from '../utils/auth';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { ProductDetailsZoom } from './ProductDetailsZoom.jsx';
 
 export default function ShopProductDetails() {
   const { id } = useParams();
@@ -53,9 +54,7 @@ export default function ShopProductDetails() {
   const fetchProductDetails = useCallback(async () => {
     try {
       setError('');
-      console.log('Fetching product details for ID:', id);
       const response = await axios.get(`${Api_Base_Url}/api/shop-products/${id}/`);
-      console.log('Product details response:', response.data);
       setProduct(response.data);
 
     } catch (error) {
@@ -161,7 +160,6 @@ export default function ShopProductDetails() {
           ...(access ? { Authorization: `Bearer ${access}` } : {})
         }
       });
-      console.log('Order placed:', res.data);
       setOrderSuccess(true);
       setOrderMessage('Order placed successfully.');
       toast.success('Order placed successfully');
@@ -327,13 +325,9 @@ export default function ShopProductDetails() {
               {/* Main Image */}
               <div className="relative border border-black rounded-lg overflow-hidden mb-4 bg-white">
                 <div className="aspect-square flex items-center justify-center p-8">
-                  <img
+                  <ProductDetailsZoom
                     src={productImages[selectedImage] || '/api/placeholder/600/600'}
                     alt={product?.product?.name || product?.name || 'Product'}
-                    className="max-w-full max-h-full object-contain"
-                    onError={(e) => {
-                      e.target.src = '/api/placeholder/600/600';
-                    }}
                   />
                 </div>
                 {/* NEW badge */}

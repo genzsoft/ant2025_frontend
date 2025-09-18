@@ -68,7 +68,6 @@ export default function Auth() {
   const completeSignupAfterOtp = async (referOverride = null) => {
     try {
       setLoading(true);
-      console.log('Completing registration. Logging in and applying referral (if any).');
 
       // Log in with the same phone/password used for registration
       const loginResp = await loginUser(formData.phone, formData.password);
@@ -95,7 +94,6 @@ export default function Auth() {
       if (refer) {
         try {
           await updateUserProfile({ reference_phone: refer }, loginResp.access);
-          console.log('Referral/reference phone applied');
         } catch (refErr) {
           console.warn('Failed to set referral/reference phone:', refErr);
           // Don't block signup on referral failure
@@ -161,17 +159,14 @@ export default function Auth() {
     if (activeTab === 'signup' && signupStep === 'form') {
       try {
         setLoading(true);
-        console.log('Starting registration with phone:', formData.phone);
         const response = await registerUser(formData.phone, formData.password);
         
-        console.log('Registration successful:', response);
         setSignupStep('otp');
         setOtpTimer(40);
         setError('');
         
       } catch (error) {
         console.error('Registration error:', error);
-        console.log('Error details:', error);
         
         if (error.message.includes('not verified')) {
           // Account not verified, redirect to OTP verification step and resend OTP
@@ -189,9 +184,7 @@ export default function Auth() {
             theme: "colored",
           });
           try {
-            console.log('Resending OTP for phone:', formData.phone);
             await resendSignupOTP(formData.phone);
-            console.log('OTP resent successfully');
           } catch (otpError) {
             console.error('Failed to resend OTP:', otpError);
           }
@@ -230,10 +223,8 @@ export default function Auth() {
     } else if (activeTab === 'signup' && signupStep === 'otp') {
       try {
         setLoading(true);
-        console.log('Starting OTP verification with phone:', formData.phone, 'OTP:', formData.otp);
   const response = await verifySignupOTP(formData.phone, formData.otp);
         
-        console.log('OTP verified successfully:', response);
         
         // Move to refer code step
         setSignupStep('referCode');
@@ -258,12 +249,10 @@ export default function Auth() {
     
     try {
       setLoading(true);
-      console.log('Starting login with phone:', formData.phone);
       
       // Call login API
       const response = await loginUser(formData.phone, formData.password);
       
-      console.log('Login successful:', response);
       
       // Store tokens in localStorage
       storeTokens({
@@ -292,11 +281,9 @@ export default function Auth() {
       // If user is shop owner, fetch and store shop data
       if (userRole === 'shop_owner') {
         try {
-          console.log('User is shop owner, fetching shop data...');
           const shopResponse = await fetchShopData(response.access);
           
           if (shopResponse && shopResponse.shop) {
-            console.log('Shop data fetched successfully:', shopResponse.shop);
             storeShopData(shopResponse.shop);
           }
         } catch (shopError) {
@@ -308,7 +295,6 @@ export default function Auth() {
       // Dispatch custom event for navbar update
       window.dispatchEvent(new CustomEvent('userStatusChanged'));
       
-      console.log('User logged in successfully:', userData);
       
       // Reset form
       setFormData({
@@ -329,7 +315,6 @@ export default function Auth() {
       
     } catch (error) {
       console.error('Login error:', error);
-      console.log('Error details:', error);
       if (error.message.includes('not verified')) {
         // Account not verified, redirect to OTP verification
         setActiveTab('signup');
@@ -348,9 +333,7 @@ export default function Auth() {
         });
         // Automatically send OTP under the hood
         try {
-          console.log('Resending OTP for phone:', formData.phone);
           await resendSignupOTP(formData.phone);
-          console.log('OTP resent successfully');
         } catch (otpError) {
           console.error('Failed to resend OTP:', otpError);
         }
@@ -377,10 +360,8 @@ export default function Auth() {
       try {
         setLoading(true);
         setError('');
-        console.log('Resending OTP for phone:', formData.phone);
         
   const response = await resendSignupOTP(formData.phone);
-        console.log('OTP resent successfully:', response);
         
         setOtpTimer(40);
         setFormData(prev => ({ ...prev, otp: '' }));

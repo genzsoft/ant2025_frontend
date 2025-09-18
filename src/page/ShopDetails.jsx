@@ -73,7 +73,6 @@ export default function ShopDetails() {
       setError('');
       // Try to filter by shop ID in the API call
       const response = await axios.get(`${Api_Base_Url}/api/shop-products/?shop=${id}`);
-      console.log('Fetched products from API:', response.data);
 
       // Handle paginated response structure
       let shopProducts = [];
@@ -205,9 +204,9 @@ export default function ShopDetails() {
         {/* Shop Details Header */}
         {shop && (
           <div className="bg-white rounded-lg shadow-sm p-6 lg:p-8 mb-8">
-            <div className="flex flex-col lg:flex-row gap-8 items-start">
+            <div className="flex flex-col lg:flex-row gap-8 items-center">
               {/* Compact Image */}
-              <div className="flex flex-row lg:flex-row gap-8 items-start">
+              <div className="flex flex-row lg:flex-row gap-8 items-center">
 
 
                 <div className="w-32 lg:w-80 justify-center items-center h-auto flex-shrink-0 relative group">

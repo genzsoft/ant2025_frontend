@@ -54,7 +54,6 @@ export default function Training() {
       .then(res => {
         if (!mounted) return;
         const list = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.results) ? res.data.results : []);
-        console.log('Training API Response:', res.data);
 
         // Filter for training-related products and normalize price
         const trainingProducts = list

@@ -189,10 +189,8 @@ export const loginUser = async (username, password) => {
     body: JSON.stringify(requestBody),
   });
   const data = await res.json();
-  console.log(data);
 
   if (!res.ok) {
-    console.log(res);
 
     let errorMessage = data.message || data.detail;
     if (data.non_field_errors && Array.isArray(data.non_field_errors) && data.non_field_errors.length > 0) {

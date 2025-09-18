@@ -35,8 +35,8 @@ export default function Contact() {
   setIsSubmitting(true);
 
     try {
-     // const accessKey = settings?.accesskey;
-      const accessKey = "eb8603ea-64b8-4cf9-8226-d2d6b701ddd7";
+      const accessKey = settings?.accesskey;
+      // const accessKey = "eb8603ea-64b8-4cf9-8226-d2d6b701ddd7";
       if (!accessKey) {
         toast.error('Access key not configured. Please contact support.');
         return;
@@ -59,7 +59,6 @@ export default function Contact() {
         e.target.reset();
         setFormData({ name: '', phone: '', email: '', message: '' });
       } else {
-        console.log('Error', data);
         toast.error(data.message || 'Failed to send message.');
       }
     } catch (error) {

@@ -73,7 +73,6 @@ export default function Product() {
     axios.get(apiUrl)
       .then(res => {
         if (!mounted) return;
-        console.log('API Response:', res.data);
 
         // Handle paginated response
         if (res.data && typeof res.data === 'object' && res.data.results) {
@@ -194,7 +193,6 @@ export default function Product() {
 
   const handleSearch = () => {
     // Search is now handled reactively by the useEffect that watches searchTerm
-    console.log("Search triggered:", searchTerm, "Category:", selectedCategory);
   };
 
   // Order functionality
@@ -242,7 +240,6 @@ export default function Product() {
 
       if (!shop_id) {
         console.error('❌ [Product.jsx] Shop ID not found in localStorage');
-        console.log('Available shop data keys:', Object.keys(shopData));
         toast.error('Shop information not found. Please refresh and try again.');
         return;
       }
@@ -260,7 +257,6 @@ export default function Product() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${currentUser.accessToken}`
       };
-      console.log('📋 [Product.jsx] Request Headers:', requestHeaders);
 
 
       const response = await axios.post(
@@ -271,15 +267,9 @@ export default function Product() {
         }
       );
 
-      console.log('✅ [Product.jsx] API Response received');
-      console.log('📊 [Product.jsx] Response Status:', response.status);
-      console.log('📊 [Product.jsx] Response Status Text:', response.statusText);
-      console.log('📊 [Product.jsx] Response Headers:', response.headers);
-      console.log('📊 [Product.jsx] Response Data:', response.data);
-      console.log('📊 [Product.jsx] Full Response Object:', response);
+ 
 
       if (response.status === 200 || response.status === 201) {
-        console.log('🎉 [Product.jsx] Order placed successfully!');
         toast.success(`Order placed successfully! Quantity: ${orderQuantity} x ${selectedProduct.name}`);
         closeOrderModal();
       } else {
@@ -360,8 +350,6 @@ export default function Product() {
       }
     } finally {
       setOrderLoading(false);
-      console.log('🏁 [Product.jsx] Setting loading state to false');
-      console.log('🏁 [Product.jsx] Order process completed');
     }
   };
 

@@ -57,7 +57,6 @@ export default function ViewInShop() {
     axios
       .get(`${Api_Base_Url}/api/shop-products/?product=${id}`)
       .then((res) => {
-        console.log('ViewInShop API Response:', res.data);
         
         // Handle paginated response structure
         let shopProducts = [];

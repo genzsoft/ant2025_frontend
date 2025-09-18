@@ -313,7 +313,6 @@ export default function Profile() {
         return;
       }
 
-      console.log('[Profile.jsx] Sending PATCH payload:', payload);
 
       let response;
       if (hasImage) {
@@ -352,7 +351,6 @@ export default function Profile() {
         });
       }
 
-      console.log('[Profile.jsx] PATCH response:', response.data);
       toast.success('Profile updated successfully');
       
       // Update local state with response

@@ -59,7 +59,6 @@ function Myshop() {
 
   const fetchShopData = async (accessToken) => {
     try {
-      console.log('Fetching shop data with token:', accessToken);
 
       const response = await fetch('https://admin.ant2025.com/api/my-shop/', {
         method: 'GET',
@@ -71,8 +70,6 @@ function Myshop() {
 
       const data = await response.json();
 
-      console.log('Shop Data Response Status:', response.status);
-      console.log('Shop Data Response:', data);
 
       if (!response.ok) {
         throw new Error(data.message || 'Failed to fetch shop data');
@@ -90,11 +87,9 @@ function Myshop() {
       setProductsLoading(true);
       setProductsError('');
 
-      console.log('🛍️ [Myshop.jsx] Fetching shop products for shop ID:', shopId, 'page:', page);
 
       // Try to filter by shop ID in the API call (same as ShopDetails.jsx)
       const response = await axios.get(`${Api_Base_Url}/api/shop-products/?shop=${shopId}&page=${page}`);
-      console.log('🛍️ [Myshop.jsx] Shop products response:', response.data);
 
       // Handle paginated response structure (same logic as ShopDetails.jsx)
       let shopProducts = [];
@@ -116,7 +111,6 @@ function Myshop() {
 
       // If API doesn't support shop filtering or no products found, filter client-side
       if (!shopProducts || shopProducts.length === 0) {
-        console.log('🛍️ [Myshop.jsx] No products found with shop filter, trying fallback...');
         const allProductsResponse = await axios.get(`${Api_Base_Url}/api/shop-products/`);
         let allProducts = [];
 
@@ -135,7 +129,6 @@ function Myshop() {
       }
 
       setProducts(shopProducts);
-      console.log('🛍️ [Myshop.jsx] Final products set:', shopProducts);
 
     } catch (error) {
       console.error('🛍️ [Myshop.jsx] Error fetching shop products:', error);
@@ -158,12 +151,10 @@ function Myshop() {
           return;
         }
 
-        console.log('Current user:', currentUser);
 
         // First try to get cached data for immediate display
         const cachedShopData = getStoredShopData();
         if (cachedShopData) {
-          console.log('Using cached shop data:', cachedShopData);
           setShopData(cachedShopData);
         }
 
@@ -171,7 +162,6 @@ function Myshop() {
         try {
           const freshData = await fetchShopData(currentUser.accessToken);
           if (freshData && freshData.shop) {
-            console.log('Fresh shop data received:', freshData.shop);
             setShopData(freshData.shop);
 
             // Update localStorage with fresh data

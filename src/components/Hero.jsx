@@ -113,7 +113,6 @@ export default function Hero() {
     axios
       .get(`${Api_Base_Url}/api/products/`)
       .then((res) => {
-        console.log('API Response:', res.data);
         
         if (!mounted) return;
         // Handle direct array response or nested response
