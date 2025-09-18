@@ -93,6 +93,8 @@ function Myshop() {
 
       // Handle paginated response structure (same logic as ShopDetails.jsx)
       let shopProducts = [];
+      console.log('🛍️ [Myshop.jsx] Fetched products response:', response.data);
+      
       if (response.data && response.data.results) {
         // Paginated response
         shopProducts = response.data.results;

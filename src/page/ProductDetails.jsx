@@ -568,7 +568,7 @@ export default function ProductDetails() {
                                             <div className="text-2xl font-extrabold text-zinc-800">
                                                 BDT {formatMoney(product.retailer_price)} TK
                                             </div>
-                                            <div className="text-sm text-gray-500 line-through">
+                                            <div className="text-sm text-gray-500 ">
                                                 MRP {formatMoney(product.mrp)} TK
                                             </div>
 

@@ -13,14 +13,15 @@ export default function ShopProductDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedImage, setSelectedImage] = useState(0);
-  const [selectedSize, _setSelectedSize] = useState('Big size');
+  const [_selectedSize, _setSelectedSize] = useState('Big size');
   const [_selectedVolume, _setSelectedVolume] = useState('800ml');
   const [quantity, setQuantity] = useState(1);
   const [orderLoading, setOrderLoading] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState(false);
-  const [orderMessage, setOrderMessage] = useState('');
+  const [, setOrderSuccess] = useState(false);
+  const [, setOrderMessage] = useState('');
   const [showDescription, setShowDescription] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  
   const navigate = useNavigate();
   // Hold-to-confirm state (borrowed pattern from Recharge)
   const [showHold, setShowHold] = useState(false);
@@ -154,7 +155,7 @@ export default function ShopProductDetails() {
       setOrderSuccess(false);
       const tokens = getStoredTokens();
       const access = tokens?.access;
-      const res = await axios.post(`${Api_Base_Url}/api/place-order/`, payload, {
+      await axios.post(`${Api_Base_Url}/api/place-order/`, payload, {
         headers: {
           'Content-Type': 'application/json',
           ...(access ? { Authorization: `Bearer ${access}` } : {})
@@ -461,20 +462,30 @@ export default function ShopProductDetails() {
                 {/* Action Buttons */}
                 <div className="grid grid-cols-1 sm:grid-cols-1 gap-3">
                   <button
-                    onClick={openHoldOverlay}
-                    disabled={!product?.stock || product?.stock === '0' || orderLoading}
-                    className={`w-full py-3 text-sm font-bold rounded transition-colors flex items-center justify-center gap-2 ${product?.stock && product?.stock !== '0' && !orderLoading
-                      ? 'bg-green-600 text-white hover:bg-green-700'
-                      : (!product?.stock || product?.stock === '0') ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white opacity-80'
-                      }`}
+                    onClick={() => { if (currentUser?.role === 'shop_owner') return; openHoldOverlay(); }}
+                    disabled={currentUser?.role === 'shop_owner' || !product?.stock || product?.stock === '0' || orderLoading}
+                    title={currentUser?.role === 'shop_owner' ? 'Shop owners cannot buy from here' : undefined}
+                    className={`w-full py-3 text-sm font-bold rounded transition-colors flex items-center justify-center gap-2 ${
+                      currentUser?.role === 'shop_owner'
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : (product?.stock && product?.stock !== '0' && !orderLoading)
+                          ? 'bg-green-600 text-white hover:bg-green-700'
+                          : (!product?.stock || product?.stock === '0')
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-green-600 text-white opacity-80'
+                    }`}
                   >
-                    {orderLoading && (
+                    {orderLoading && currentUser?.role !== 'shop_owner' && (
                       <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
                       </svg>
                     )}
-                    {product?.stock && product?.stock !== '0' ? (orderLoading ? 'PROCESSING...' : 'BUY NOW') : 'OUT OF STOCK'}
+                    {currentUser?.role === 'shop_owner'
+                      ? 'UNAVAILABLE FOR SHOP OWNERS'
+                      : (product?.stock && product?.stock !== '0'
+                          ? (orderLoading ? 'PROCESSING...' : 'BUY NOW')
+                          : 'OUT OF STOCK')}
                   </button>
                 </div>
               </div>
