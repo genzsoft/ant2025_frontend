@@ -1,0 +1,39 @@
+# Enable URL rewriting
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Never rewrite static assets or runtime env
+  RewriteRule ^assets/ - [L]
+  RewriteRule ^wasm/ - [L]
+  RewriteRule ^env-config\.js$ - [L]
+  RewriteRule ^vite\.svg$ - [L]
+  RewriteRule ^.*\.(css|js|png|jpe?g|svg|gif|ico|webp|txt|json|map)$ - [L,NC]
+
+  # If a real file or directory, serve it directly
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Otherwise, serve index.html (SPA fallback)
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Ensure correct MIME type for WebAssembly
+AddType application/wasm .wasm
+
+# Prevent caching of runtime env so you can edit BASE_URL on server
+<IfModule mod_headers.c>
+  <Files "env-config.js">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </Files>
+
+  # Optional: Uncomment the following headers if you need WebAssembly threads (COOP/COEP)
+  # WARNING: This isolates your site; cross-origin embeds may break. Test thoroughly.
+  # Header set Cross-Origin-Opener-Policy "same-origin"
+  # Header set Cross-Origin-Embedder-Policy "require-corp"
+</IfModule>
+
+# Avoid content negotiation pitfalls
+Options -MultiViews

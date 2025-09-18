@@ -106,9 +106,12 @@ export default function ProductDetails() {
 
     if (!product) {
         return (
-            <section className="min-h-[60vh] flex items-center justify-center">
-                <div className="text-gray-500 text-sm">Loading product…</div>
-            </section>
+            <section className="flex justify-center items-center min-h-[60vh] py-20">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading products...</p>
+                  </div>
+                </section>
         );
     }
 
@@ -623,7 +626,7 @@ export default function ProductDetails() {
                                 {<div>
                                     {userRole === 'shop_owner' &&
                                         product?.retailer_price &&
-                                        product?.mrp  ? (
+                                        product?.mrp ? (
                                         <div className="flex items-baseline gap-3">
                                             <div className="text-2xl font-extrabold text-zinc-800">
                                                 BDT {formatMoney(product.retailer_price)} TK
@@ -631,7 +634,7 @@ export default function ProductDetails() {
                                             <div className="text-sm text-gray-500 line-through">
                                                 MRP {formatMoney(product.mrp)} TK
                                             </div>
-                                            
+
                                         </div>
                                     ) : (
                                         <div className="text-2xl font-extrabold text-zinc-800">
@@ -640,7 +643,7 @@ export default function ProductDetails() {
                                     )}
                                 </div>
                                 }
-                               
+
 
 
 
@@ -890,7 +893,7 @@ export default function ProductDetails() {
             )}
 
             {/* QR Scanner Modal */}
-            <QRScanner 
+            <QRScanner
                 isOpen={showQRScanner}
                 onClose={closeQRScanner}
             />

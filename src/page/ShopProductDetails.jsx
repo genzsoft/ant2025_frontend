@@ -35,7 +35,7 @@ export default function ShopProductDetails() {
 
 
   // Description helpers (approximate 4 lines or ~50+ words)
-  const descriptionHtml = product?.description || '';
+  const descriptionHtml = product?.product?.description || product?.description || '';
   const descriptionPlain = useMemo(() => {
     if (!descriptionHtml) return '';
     try {
@@ -487,7 +487,7 @@ export default function ShopProductDetails() {
 
               {/* Product Description - Moved below buttons */}
 
-              {product?.description && (
+              {(product?.product?.description || product?.description) && (
                 <div className="mt-6 pt-6 border-t border-gray-200">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-lg font-semibold text-gray-900">Product Description</h3>
@@ -518,7 +518,7 @@ export default function ShopProductDetails() {
                       overflow: 'hidden',
                       textOverflow: 'ellipsis'
                     } : undefined}
-                    dangerouslySetInnerHTML={{ __html: product.description }}
+                    dangerouslySetInnerHTML={{ __html: product?.product?.description || product?.description || '' }}
                   />
                 </div>
               )}
