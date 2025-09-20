@@ -1,13 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { getCurrentUser, isAuthenticated, logout } from '../../utils/auth.js';
+import { getCurrentUser, isAuthenticated, logout, removeTokens } from '../../utils/auth.js';
 import { useSiteSettings } from '../../config/sitesetting.js';
+import axios from 'axios';
+import { Api_Base_Url } from '../../config/api.js';
 
 function Navbar() {
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileProfileOpen, setMobileProfileOpen] = useState(false);
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null); // /auth/user/
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const settings = useSiteSettings();
   const navigate = useNavigate();
   const menuRef = useRef(null);
@@ -20,24 +24,59 @@ function Navbar() {
     return `${window._env_?.BASE_URL || ''}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
-  useEffect(() => {
-    const checkUserStatus = () => {
-      if (isAuthenticated()) {
-        const currentUser = getCurrentUser();
-        setUser(currentUser);
-      } else {
-        setUser(null);
-      }
-    };
-
-    checkUserStatus();
-    window.addEventListener('storage', checkUserStatus);
-    window.addEventListener('userStatusChanged', checkUserStatus);
-    return () => {
-      window.removeEventListener('storage', checkUserStatus);
-      window.removeEventListener('userStatusChanged', checkUserStatus);
-    };
+  // Fetch profile (subset of Profile.jsx logic - only needs image + name/phone)
+  const fetchProfile = useCallback(async (accessToken) => {
+    if (!accessToken) return;
+    try {
+      const res = await axios.get(`${Api_Base_Url}/auth/user/`, {
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' }
+      });
+      setProfile(res.data);
+  try { localStorage.setItem('userProfile', JSON.stringify(res.data)); } catch { /* ignore storage */ }
+    } catch (err) {
+      console.error('[Navbar] profile fetch failed', err);
+    } finally {
+      setLoadingProfile(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const init = () => {
+      if (!isAuthenticated()) {
+        removeTokens();
+        setUser(null);
+        setProfile(null);
+        setLoadingProfile(false);
+        return;
+      }
+      const authUser = getCurrentUser();
+      if (!authUser) {
+        removeTokens();
+        setUser(null);
+        setLoadingProfile(false);
+        return;
+      }
+      setUser(authUser);
+      // quick paint from cache
+      const cached = localStorage.getItem('userProfile');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          setProfile(parsed);
+          setLoadingProfile(false);
+        } catch {/* ignore */}
+      }
+      // always refresh
+      fetchProfile(authUser.accessToken);
+    };
+    init();
+    window.addEventListener('storage', init);
+    window.addEventListener('userStatusChanged', init);
+    return () => {
+      window.removeEventListener('storage', init);
+      window.removeEventListener('userStatusChanged', init);
+    };
+  }, [fetchProfile]);
 
   // Lock body scroll when menu open
   useEffect(() => {
@@ -121,6 +160,7 @@ function Navbar() {
   const handleLogout = () => {
     logout();
     setUser(null);
+    setProfile(null);
     navigate('/');
   };
 
@@ -156,6 +196,22 @@ function Navbar() {
       { label: 'Shops', to: '/shops' },
       ...baseItems
     ];
+  };
+
+  // Profile Image Component
+  const ProfileImage = ({ className }) => {
+    if (loadingProfile && !profile?.user_img) {
+      return <div className={`${className} bg-gray-200 animate-pulse`}/>;
+    }
+    const src = profile?.user_img || 'https://placehold.co/214x220';
+    return (
+      <img
+        src={src}
+        alt="User"
+        className={`${className} object-cover`}
+        onError={(e) => { e.currentTarget.src = 'https://placehold.co/214x220'; }}
+      />
+    );
   };
 
   const navItems = getNavItems();
@@ -209,12 +265,10 @@ function Navbar() {
               <div className="relative" ref={mobileProfileRef}>
                 <button
                   onClick={() => setMobileProfileOpen((p) => !p)}
-                  className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center focus:ring-2 focus:ring-green-600"
+                  className="w-12 h-12 rounded-full overflow-hidden focus:ring-2 focus:ring-green-600"
                   type="button"
                 >
-                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                  </svg>
+                  <ProfileImage className="w-full h-full rounded-full" />
                 </button>
                 {mobileProfileOpen && (
                   <div className="absolute right-0 mt-2 w-40 bg-white border rounded-md shadow-lg z-50">
@@ -266,11 +320,9 @@ function Navbar() {
               <div className="relative" ref={profileRef}>
                 <button
                   onClick={() => setProfileOpen((p) => !p)}
-                  className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center focus:ring-2 focus:ring-green-600"
+                  className="w-12 h-12 rounded-full overflow-hidden focus:ring-2 focus:ring-green-600"
                 >
-                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                  </svg>
+                  <ProfileImage className="w-full h-full rounded-full" />
                 </button>
                 {profileOpen && (
                   <div className="absolute right-0 mt-2 w-40 bg-white border rounded-md shadow-lg z-50">
@@ -327,10 +379,8 @@ function Navbar() {
                       onClick={() => setOpen(false)}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-green-600 bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"
                     >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                      </svg>
-                      <span>Profile - {user?.name || user?.phone || 'User'}</span>
+                      <div className="w-4 h-4 rounded-full overflow-hidden"><ProfileImage className="w-full h-full rounded-full" /></div>
+                      <span>Profile - {profile?.name || profile?.phone || 'User'}</span>
                     </Link>
                   ) : (
                     <Link

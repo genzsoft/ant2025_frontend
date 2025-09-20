@@ -493,7 +493,7 @@ export default function Profile() {
               <div className="w-32 h-32 md:w-full md:h-auto aspect-square bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center border border-gray-200 mx-auto md:mx-0">
                 <img
                   className="w-full h-full object-cover"
-                  src={imagePreview || profile?.user_img || 'https://placehold.co/214x220'}
+                  src={ profile?.user_img || 'https://placehold.co/214x220'}
                   alt="Profile"
                   onError={(e) => { e.target.src = 'https://placehold.co/214x220'; }}
                 />
