@@ -8,6 +8,8 @@ export default function ReviewCard({
   text = '',
 }) {
   const safeRating = Math.max(0, Math.min(5, Number(rating) || 0));
+  const [imgOk, setImgOk] = React.useState(true);
+  const showImage = avatar && imgOk;
   const stars = Array.from({ length: 5 }).map((_, i) => (
     <svg
       key={i}
@@ -30,7 +32,31 @@ export default function ReviewCard({
   return (
     <article className="w-full max-w-md p-6 bg-neutral-100 rounded-xl border border-neutral-200 flex flex-col gap-4">
       <header className="flex items-center gap-3">
-        <img className="h-8 w-8 rounded-full object-cover" src={avatar} alt={`${name} avatar`} />
+        {showImage ? (
+          <img
+            className="h-8 w-8 rounded-full object-cover"
+            src={avatar}
+            alt={`${name} avatar`}
+            onError={() => setImgOk(false)}
+          />
+        ) : (
+          <div className="h-8 w-8 rounded-full bg-neutral-300 flex items-center justify-center text-neutral-600">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
+            </svg>
+          </div>
+        )}
         <div className="flex flex-col">
           <span className="text-xs font-bold text-zinc-900">{name}</span>
           {role ? <span className="text-[10px] text-zinc-600 leading-none">{role}</span> : null}
