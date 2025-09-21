@@ -14,9 +14,8 @@ const Footer = () => {
   return (
     <footer className="bg-white ">
       <div className="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8 py-12">
-        {/** Prepare social links */}
+        {/** Prepare social links & 2-half layout */}
         {(() => {
-          // Only consider these four as per requirement
           const formatUrl = (u) => {
             if (!u) return '';
             return /^https?:/i.test(u) ? u : `https://${u}`;
@@ -31,49 +30,58 @@ const Footer = () => {
             .map(p => ({ ...p, url: formatUrl(settings?.[p.key]) }))
             .filter(p => p.url);
 
-          const gridCols = availableSocial.length > 0 ? 'md:grid-cols-3' : 'md:grid-cols-3';
-          const gridClass = `grid grid-cols-1 ${gridCols} gap-12`;
-
           return (
-            <div className={gridClass}>
-              {/* Brand */}
+            <div className="flex flex-col md:grid md:grid-cols-2 gap-12">
+              {/* Left Half: Brand & Description */}
               <div>
                 <div className="flex items-center gap-4">
-                  <img src={resolveAsset(settings?.logo, '/ant.png')} alt="ANT" className="h-16 w-16 rounded object-contain" onError={(e)=>{e.currentTarget.src='/ant.png';}} />
-                  <span className="text-2xl  font-bold text-gray-800">{settings?.company_name}</span>
+                  <img
+                    src={resolveAsset(settings?.logo, '/ant.png')}
+                    alt="ANT"
+                    className="h-16 w-16 rounded object-contain"
+                    onError={(e) => { e.currentTarget.src = '/ant.png'; }}
+                  />
+                  <span className="text-2xl font-bold text-gray-800">{settings?.company_name}</span>
                 </div>
                 <p className="mt-4 text-gray-700">
                   {settings?.footer_short_description || 'ANT enhances your customer service, sales, and marketing efforts with intuitive features that anyone can use.'}
                 </p>
-
               </div>
 
-              {/* Quick Links */}
-              <div>
-                <h4 className="text-lg font-semibold">Quick Links</h4>
-                <ul className="mt-3 space-y-2 text-gray-700">
-                  <li><Link to="/product" className="hover:text-green-600">Products</Link></li>
-                  <li><Link to="/shops" className="hover:text-green-600">Shops</Link></li>
-                  <li><Link to="/about" className="hover:text-green-600">About us</Link></li>
-                  <li><Link to="/contact" className="hover:text-green-600">Contact</Link></li>
-                </ul>
-              </div>
-
-
-
-              {/* Follow us (only if at least one link) */}
-              {availableSocial.length > 0 && (
+              {/* Right Half: Quick Links + Follow (2 columns inside) */}
+              <div className={`grid gap-8 ${availableSocial.length > 0 ? 'sm:grid-cols-2' : 'sm:grid-cols-1'} grid-cols-2`}>
+                {/* Quick Links */}
                 <div>
-                  <h4 className="text-lg font-semibold">Follow us</h4>
+                  <h4 className="text-lg font-semibold">Quick Links</h4>
                   <ul className="mt-3 space-y-2 text-gray-700">
-                    {availableSocial.map(s => (
-                      <li key={s.key}>
-                        <a href={s.url} target="_blank" rel="noopener noreferrer" className="hover:text-green-600">{s.label}</a>
-                      </li>
-                    ))}
+                    <li><Link to="/product" className="hover:text-green-600">Products</Link></li>
+                    <li><Link to="/shops" className="hover:text-green-600">Shops</Link></li>
+                    <li><Link to="/about" className="hover:text-green-600">About us</Link></li>
+                    <li><Link to="/contact" className="hover:text-green-600">Contact</Link></li>
                   </ul>
                 </div>
-              )}
+
+                {/* Follow us */}
+                {availableSocial.length > 0 && (
+                  <div>
+                    <h4 className="text-lg font-semibold">Follow us</h4>
+                    <ul className="mt-3 space-y-2 text-gray-700">
+                      {availableSocial.map(s => (
+                        <li key={s.key}>
+                          <a
+                            href={s.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:text-green-600"
+                          >
+                            {s.label}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           );
         })()}
