@@ -198,19 +198,46 @@ function Navbar() {
     ];
   };
 
-  // Profile Image Component
+  // Profile Image Component with SVG fallback icon (no external placeholder)
   const ProfileImage = ({ className }) => {
+    const [imgOk, setImgOk] = React.useState(true);
+
+    // Skeleton while loading and no cached image yet
     if (loadingProfile && !profile?.user_img) {
-      return <div className={`${className} bg-gray-200 animate-pulse`}/>;
+      return <div className={`${className} bg-gray-200 animate-pulse rounded-full`}/>;
     }
-    const src = profile?.user_img || 'https://placehold.co/214x220';
+
+    const hasImg = !!profile?.user_img && imgOk;
+
+    if (hasImg) {
+      return (
+        <img
+          src={profile.user_img}
+            alt="User avatar"
+          className={`${className} object-cover`}
+          onError={() => setImgOk(false)}
+        />
+      );
+    }
+
+    // Fallback icon
     return (
-      <img
-        src={src}
-        alt="User"
-        className={`${className} object-cover`}
-        onError={(e) => { e.currentTarget.src = 'https://placehold.co/214x220'; }}
-      />
+      <div className={`${className} bg-neutral-300 flex items-center justify-center text-neutral-600`}>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-2/3 w-2/3"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
+        </svg>
+      </div>
     );
   };
 

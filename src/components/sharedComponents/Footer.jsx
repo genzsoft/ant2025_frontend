@@ -11,6 +11,16 @@ const Footer = () => {
     return `${window._env_?.BASE_URL || ''}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
+  // Safely render limited HTML (allowing anchor tags) for footer_text coming from settings
+  const renderFooterHtml = (html) => {
+    if (!html || typeof html !== 'string') return null;
+    // Strip script tags defensively
+    let safe = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    // Ensure external links have rel security attributes if not already present
+    safe = safe.replace(/<a (?![^>]*rel=)/gi, '<a rel="noopener noreferrer" ');
+    return <span dangerouslySetInnerHTML={{ __html: safe }} />;
+  };
+
   return (
     <footer className="bg-white ">
       <div className="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8 py-12">
@@ -98,9 +108,8 @@ const Footer = () => {
         </div>
 
         {/* Bengali credit line */}
-        <div className="mt-3 w-full text-center text-black text-lg font-normal font-['Hind_Siliguri']">
-       <a href="">{settings.footer_text} </a>
-          
+        <div className="mt-3 w-full text-center text-black text-md font-normal font-['Hind_Siliguri']">
+          {renderFooterHtml(settings?.footer_text) || null}
         </div>
       </div>
     </footer>

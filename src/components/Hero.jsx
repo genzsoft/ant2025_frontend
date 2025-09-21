@@ -175,18 +175,34 @@ export default function Hero() {
           </p>
         </div>
 
-        {/* slider */}
+        {/* slider (1520x650 ratio => 1520/650 ≈ 2.338) */}
         <div className="mt-10 relative">
-          <div ref={viewportRef} className="h-[340px] sm:h-[400px] md:h-[480px] lg:h-[520px] w-full overflow-hidden rounded-2xl bg-gradient-to-b from-lime-500 to-lime-200">
-            <div
-              className="flex h-full transition-transform duration-500"
-              style={{ transform: `translateX(-${idx * vw}px)` }}
-            >
-              {slides.map((src, i) => (
-                <div key={i} className="h-full flex-shrink-0" style={{ width: vw }}>
-                  <img src={src} alt={`Slide ${i + 1}`} className="h-full w-full object-cover object-center" loading="lazy" />
-                </div>
-              ))}
+          <div
+            ref={viewportRef}
+            className="relative w-full overflow-hidden rounded-2xl bg-gradient-to-b from-lime-500 to-lime-200"
+            style={{
+              // Use aspect-ratio when supported; fallback padding-top for older browsers
+              aspectRatio: '1520 / 650',
+              maxHeight: '650px'
+            }}
+          >
+            {/* padding-top fallback (only affects browsers without aspect-ratio) */}
+            <div className="absolute inset-0">
+              <div
+                className="flex h-full transition-transform duration-500"
+                style={{ transform: `translateX(-${idx * vw}px)` }}
+              >
+                {slides.map((src, i) => (
+                  <div key={i} className="h-full flex-shrink-0" style={{ width: vw }}>
+                    <img
+                      src={src}
+                      alt={`Slide ${i + 1}`}
+                      className="h-full w-full object-contain object-center"
+                      loading="lazy"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           {/* arrows */}
