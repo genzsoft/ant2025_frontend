@@ -21,7 +21,7 @@ export default function ListProductCard({
         <div className="flex items-center gap-4 flex-1 min-w-0">
           {/* Product Image */}
           <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 flex-shrink-0">
-            <img src={image} alt={name} className="w-full h-full object-cover rounded-lg" />
+            <img src={image} alt={name} className="w-full h-full object-contain rounded-lg" />
           </div>
 
           {/* Product Info */}
@@ -76,7 +76,7 @@ export default function ListProductCard({
       <div className="flex items-center gap-4 flex-1 min-w-0">
         {/* Product Image */}
         <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 flex-shrink-0">
-          <img src={image} alt={name} className="w-full h-full object-cover rounded-lg" />
+          <img src={image} alt={name} className="w-full h-full object-contain rounded-lg" />
         </div>
 
         {/* Product Info */}
