@@ -39,8 +39,8 @@ const Footer = () => {
               {/* Brand */}
               <div>
                 <div className="flex items-center gap-4">
-                  <img src={resolveAsset(settings?.logo, '/ant.png')} alt="ANT" className="h-12 w-12 rounded object-contain" onError={(e)=>{e.currentTarget.src='/ant.png';}} />
-                  <span className="text-2xl  font-bold text-gray-800">ANT</span>
+                  <img src={resolveAsset(settings?.logo, '/ant.png')} alt="ANT" className="h-16 w-16 rounded object-contain" onError={(e)=>{e.currentTarget.src='/ant.png';}} />
+                  <span className="text-2xl  font-bold text-gray-800">{settings?.company_name}</span>
                 </div>
                 <p className="mt-4 text-gray-700">
                   {settings?.footer_short_description || 'ANT enhances your customer service, sales, and marketing efforts with intuitive features that anyone can use.'}

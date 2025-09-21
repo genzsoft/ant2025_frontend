@@ -249,14 +249,14 @@ function Navbar() {
           </button>
 
           {/* Logo (center on mobile) */}
-          <Link to="/" className="absolute left-1/2 transform -translate-x-1/2 md:static md:transform-none flex items-center gap-2 md:gap-4 ">
+          <Link to="/" className="flex items-center gap-2 md:gap-4 md:pl-2 ">
             <img
               className="w-10 h-10 rounded object-contain bg-transparent"
               src={resolveAsset(settings?.logo, '/ant.png')}
               alt="ANT logo"
               onError={(e) => { e.currentTarget.src = '/ant.png'; }}
             />
-            <span className="text-2xl font-bold text-gray-800">ANT</span>
+          <span className="hidden md:inline-block md:text-lg   text-gray-800 truncate">{settings?.company_name}</span>
           </Link>
 
           {/* Profile / Login (right) */}
