@@ -69,9 +69,7 @@ export default function NearbyShop() {
                 <div className="flex-1">
                   <h4 className="text-base font-semibold text-gray-900 mb-1">{shop.name}</h4>
                   <p className="text-sm text-gray-500 mb-2">{shop.address}</p>
-                  <p className="text-xs text-gray-400">
-                    {[shop.upazila_name, shop.district_name, shop.division_name].filter(Boolean).join(', ')}
-                  </p>
+
                   {shop.owner_phone && (
                     <a 
                       href={`tel:${shop.owner_phone}`}

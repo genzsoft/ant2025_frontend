@@ -62,10 +62,10 @@ export default function Shops() {
     setLoading(true);
     try {
       setError('');
-      
+
       // Build query parameters
       const params = new URLSearchParams();
-      
+
       if (searchTerm) {
         params.append('search', searchTerm);
       }
@@ -78,13 +78,13 @@ export default function Shops() {
       if (selectedUpazila) {
         params.append('upazila_id', selectedUpazila);
       }
-      
+
       const queryString = params.toString();
       const url = `${Api_Base_Url}/api/shops/${queryString ? `?${queryString}` : ''}`;
-      
+
       const response = await axios.get(url);
       setShops(response.data);
-      
+
     } catch (error) {
       console.error('Error fetching shops:', error);
       setError('Failed to load shops. Please try again.');
@@ -150,7 +150,7 @@ export default function Shops() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-6">Find Shops Near You</h1>
-          
+
           {/* Error Message */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
@@ -162,7 +162,7 @@ export default function Shops() {
               </div>
             </div>
           )}
-          
+
           {/* Search and Filter Section */}
           <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
             <div className="flex flex-col gap-4">
@@ -290,8 +290,8 @@ export default function Shops() {
                 {shops.map((shop) => (
                   <div key={shop.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
                     <div className="aspect-square">
-                      <img 
-                        src={shop.shop_image || '/api/placeholder/300/300'} 
+                      <img
+                        src={shop.shop_image || '/api/placeholder/300/300'}
                         alt={shop.name}
                         className="w-full h-full object-cover"
                         onError={(e) => {
@@ -303,7 +303,7 @@ export default function Shops() {
                       <h3 className="text-xl font-semibold text-gray-900 mb-2 line-clamp-2">
                         {shop.name}
                       </h3>
-                      
+
                       {/* Owner Info */}
                       {shop.owner_name && (
                         <div className="flex items-center text-gray-600 mb-2">
@@ -322,19 +322,22 @@ export default function Shops() {
                         </svg>
                         <div className="text-sm">
                           <div>{shop.address}</div>
-                   
+
                         </div>
                       </div>
 
                       {/* Phone */}
                       {shop.owner_phone && (
                         <div className="flex items-center text-gray-600 mb-4">
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                          </svg>
-                          <span className="text-sm">{shop.owner_phone}</span>
+
+                          <a
+                            href={`tel:${shop.owner_phone}`}
+                          >
+                            📞 {shop.owner_phone}
+                          </a>
                         </div>
                       )}
+
 
                       <Link
                         to={`/shops/${shop.id}`}
