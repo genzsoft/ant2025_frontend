@@ -14,6 +14,7 @@ export default function Profile() {
   const [user, setUser] = useState(null);           // Auth info (id, role, tokens)
   const [profile, setProfile] = useState(null);     // Fetched profile data from /auth/user/
   const [originalProfile, setOriginalProfile] = useState(null); // For diffing on save
+  const [imgError, setImgError] = useState(false);  // Track profile image load failure
   const [activeSection, setActiveSection] = useState('account');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -39,6 +40,7 @@ export default function Profile() {
   const locationPresetRef = React.useRef(null);
   const [imageFile, setImageFile] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [removeImage, setRemoveImage] = useState(false); // Flag to remove existing profile image
   const fileInputRef = React.useRef(null);
   const navigate = useNavigate();
   // Change password state
@@ -278,6 +280,16 @@ export default function Profile() {
       toast.error('Please select an image file');
       return;
     }
+    // Validate size (<= 1MB)
+    const maxBytes = 1024 * 1024; // 1MB
+    if (file.size > maxBytes) {
+      toast.error('Image must be 1MB or less');
+      if (e.target) e.target.value = '';
+      return;
+    }
+    // Reset image error state when choosing a new file
+    if (imgError) setImgError(false);
+    if (removeImage) setRemoveImage(false); // selecting new image cancels removal
     setImageFile(file);
   };
 
@@ -304,14 +316,32 @@ export default function Profile() {
 
       const hasImage = !!imageFile;
       if (Object.keys(payload).length === 0 && !hasImage) {
+        if (removeImage && profile?.user_img) {
+          // Allow proceeding to removal even if no other payload changes
+        } else {
         toast.info('No changes to update');
         setSaving(false);
         return;
+        }
       }
 
 
       let response;
-      if (hasImage) {
+      if (removeImage && profile?.user_img) {
+        // Send null (assuming backend treats null as removal). If backend requires different field, adjust here.
+        try {
+          response = await axios.patch(`${Api_Base_Url}/auth/user/`, { user_img: null, ...payload }, {
+            headers: {
+              'Authorization': `Bearer ${user.accessToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        } catch (imgRemoveErr) {
+          console.error('[Profile.jsx] Image removal failed:', imgRemoveErr);
+          toast.error('Failed to remove image');
+          throw imgRemoveErr;
+        }
+      } else if (hasImage) {
         // Attempt multipart PATCH (backend may reject if user_img read-only)
         const form = new FormData();
         Object.entries(payload).forEach(([k,v]) => form.append(k, v));
@@ -388,6 +418,7 @@ export default function Profile() {
       
       // Clear image selection
       setImageFile(null);
+      setRemoveImage(false);
       
       // Merge auth user display info if name/email changed
       if (payload.name || payload.email) {
@@ -532,12 +563,17 @@ export default function Profile() {
             <div className='flex flex-row md:flex-col md:items-center gap-4 md:gap-3 '>
             <div className="relative group mb-4">
               <div className="w-32 h-32 md:w-full md:h-auto aspect-square bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center border border-gray-200 mx-auto md:mx-0">
-                <img
-                  className="w-full h-full object-cover"
-                  src={ profile?.user_img || 'https://placehold.co/214x220'}
-                  alt="Profile"
-                  onError={(e) => { e.target.src = 'https://placehold.co/214x220'; }}
-                />
+                {profile?.user_img && !imgError ? (
+                  <img
+                    className="w-full h-full object-cover"
+                    src={profile.user_img}
+                    alt="Profile"
+                    onError={() => setImgError(true)}
+                  />
+                ) : (
+                  <img src="/pfp.png" alt="" />
+
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -548,12 +584,26 @@ export default function Profile() {
                     fileInputRef.current?.click();
                   }}
                   className={`absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-sm font-medium transition-opacity ${activeSection !== 'account' ? 'cursor-not-allowed' : ''}`}
-                  disabled={uploadingImage || activeSection !== 'account'}
+                  style={{ pointerEvents: 'none' }}
+                  aria-hidden="true"
                 >
+                  {/* Overlay purely visual now; click handled by container below */}
                   {uploadingImage
                     ? 'Uploading...'
                     : (activeSection === 'account' ? 'Change Photo' : 'Go to Account info to change')}
                 </button>
+                {/* Click target (transparent) to open file dialog */}
+                <div
+                  onClick={() => {
+                    if (activeSection !== 'account') {
+                      toast.info('You can change photo only in Account info.');
+                      return;
+                    }
+                    if (!uploadingImage) fileInputRef.current?.click();
+                  }}
+                  className="absolute inset-0 z-10"
+                  style={{ background: 'transparent' }}
+                />
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -564,6 +614,25 @@ export default function Profile() {
               </div>
               {imageFile && activeSection === 'account' && (
                 <p className="text-xs text-green-600 mt-1 text-center">New image selected (will save on update)</p>
+              )}
+              {!imageFile && profile?.user_img && activeSection === 'account' && !removeImage && (
+                <div className="mt-2 flex justify-center relative z-20">
+                  <button
+                    type="button"
+                    onClick={() => setRemoveImage(true)}
+                    className="text-[11px] px-2 py-1 rounded bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition"
+                  >Remove Image</button>
+                </div>
+              )}
+              {removeImage && activeSection === 'account' && (
+                <div className="mt-2 flex flex-col items-center gap-1 relative z-20">
+                  <p className="text-[10px] text-red-600">Image will be removed on save.</p>
+                  <button
+                    type="button"
+                    onClick={() => setRemoveImage(false)}
+                    className="text-[11px] px-2 py-1 rounded bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition"
+                  >Undo</button>
+                </div>
               )}
             </div>
             <div>
