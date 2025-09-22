@@ -146,10 +146,19 @@ export default function Auth() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    // Remove all whitespace characters to block spaces entirely
+    const sanitized = value.replace(/\s+/g, '');
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: sanitized
     }));
+  };
+
+  // Prevent entering space via keyboard
+  const handlePreventSpace = (e) => {
+    if (e.key === ' ') {
+      e.preventDefault();
+    }
   };
 
   const handleSignupSubmit = async (e) => {
@@ -159,7 +168,7 @@ export default function Auth() {
     if (activeTab === 'signup' && signupStep === 'form') {
       try {
         setLoading(true);
-        const response = await registerUser(formData.phone, formData.password);
+  await registerUser(formData.phone, formData.password);
         
         setSignupStep('otp');
         setOtpTimer(40);
@@ -223,7 +232,7 @@ export default function Auth() {
     } else if (activeTab === 'signup' && signupStep === 'otp') {
       try {
         setLoading(true);
-  const response = await verifySignupOTP(formData.phone, formData.otp);
+  await verifySignupOTP(formData.phone, formData.otp);
         
         
         // Move to refer code step
@@ -361,7 +370,7 @@ export default function Auth() {
         setLoading(true);
         setError('');
         
-  const response = await resendSignupOTP(formData.phone);
+  await resendSignupOTP(formData.phone);
         
         setOtpTimer(40);
         setFormData(prev => ({ ...prev, otp: '' }));
@@ -455,6 +464,7 @@ export default function Auth() {
                               name="phone"
                               value={formData.phone}
                               onChange={handleInputChange}
+                              onKeyDown={handlePreventSpace}
                               placeholder="Phone Number*"
                               className="w-full bg-transparent text-sm md:text-base font-semibold font-['Inter'] leading-normal placeholder:text-neutral-400 focus:outline-none"
                             />
@@ -467,6 +477,7 @@ export default function Auth() {
                               name="password"
                               value={formData.password}
                               onChange={handleInputChange}
+                              onKeyDown={handlePreventSpace}
                               placeholder="Password*"
                               className="w-full bg-transparent text-sm md:text-base font-semibold font-['Inter'] leading-normal placeholder:text-neutral-400 focus:outline-none"
                             />
@@ -494,6 +505,7 @@ export default function Auth() {
                               name="phone"
                               value={formData.phone}
                               onChange={handleInputChange}
+                              onKeyDown={handlePreventSpace}
                               placeholder="Phone Number*"
                               className="w-full bg-transparent text-sm md:text-base font-semibold font-['Inter'] leading-normal placeholder:text-neutral-400 focus:outline-none"
                             />
@@ -506,6 +518,7 @@ export default function Auth() {
                               name="password"
                               value={formData.password}
                               onChange={handleInputChange}
+                              onKeyDown={handlePreventSpace}
                               placeholder="Password*"
                               className="w-full bg-transparent text-sm md:text-base font-semibold font-['Inter'] leading-normal placeholder:text-neutral-400 focus:outline-none"
                             />
@@ -554,6 +567,7 @@ export default function Auth() {
                               name="otp"
                               value={formData.otp}
                               onChange={handleInputChange}
+                              onKeyDown={handlePreventSpace}
                               placeholder="Enter 6-digit OTP*"
                               maxLength="6"
                               className="w-full bg-transparent text-sm md:text-base font-semibold font-['Inter'] leading-normal placeholder:text-neutral-400 focus:outline-none text-center tracking-wider"
@@ -605,6 +619,7 @@ export default function Auth() {
                               name="referCode"
                               value={formData.referCode}
                               onChange={handleInputChange}
+                              onKeyDown={handlePreventSpace}
                               placeholder="Enter referral code (optional)"
                               className="w-full bg-transparent text-sm md:text-base font-semibold font-['Inter'] leading-normal placeholder:text-neutral-400 focus:outline-none"
                             />

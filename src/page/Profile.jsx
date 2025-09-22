@@ -8,6 +8,7 @@ import TradeTransaction from '../components/transaction/Tradetransaction.jsx';
 import WalletTransaction from '../components/transaction/WalletTraansaction.jsx';
 import CurrencyTransaction from '../components/transaction/CurrencyTransaction.jsx';
 import Myorders from '../components/orders/Myorders';
+import DonationTransaction from '../components/transaction/DonationTransaction.jsx';
 
 export default function Profile() {
   const [user, setUser] = useState(null);           // Auth info (id, role, tokens)
@@ -37,7 +38,6 @@ export default function Profile() {
   const [selectedUpazilaId, setSelectedUpazilaId] = useState('');
   const locationPresetRef = React.useRef(null);
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = React.useRef(null);
   const navigate = useNavigate();
@@ -49,6 +49,10 @@ export default function Profile() {
   const [changingPw, setChangingPw] = useState(false);
   // Transactions tab selection
   const [transactionTab, setTransactionTab] = useState('trade');
+  // Donation states
+  const [donationMode, setDonationMode] = useState(false);
+  const [donationAmount, setDonationAmount] = useState('');
+  const [donating, setDonating] = useState(false);
 
   // Fetch profile from backend
   const fetchProfile = useCallback(async (accessToken) => {
@@ -247,12 +251,7 @@ export default function Profile() {
     fetchProfile(authUser.accessToken);
   }, [navigate, fetchProfile]);
 
-  const handleLogout = () => {
-    setUser(null);
-    removeTokens();
-    window.dispatchEvent(new CustomEvent('userStatusChanged'));
-    navigate('/');
-  };
+  // handleLogout retained in case needed elsewhere; removed unused reference to satisfy linter.
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -280,9 +279,6 @@ export default function Profile() {
       return;
     }
     setImageFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setImagePreview(reader.result);
-    reader.readAsDataURL(file);
   };
 
   const handleSave = async () => {
@@ -392,7 +388,6 @@ export default function Profile() {
       
       // Clear image selection
       setImageFile(null);
-      setImagePreview(null);
       
       // Merge auth user display info if name/email changed
       if (payload.name || payload.email) {
@@ -448,9 +443,55 @@ export default function Profile() {
     }
   };
 
+  // Donation handlers
+  const handleStartDonation = () => {
+    setDonationMode(true);
+    setDonationAmount('');
+  };
+
+  const handleCancelDonation = () => {
+    if (donating) return; // prevent cancel while sending
+    setDonationMode(false);
+    setDonationAmount('');
+  };
+
+  const handleSubmitDonation = async () => {
+    if (!user) { toast.error('Not authenticated'); return; }
+    const amt = donationAmount.trim();
+    if (!amt) { toast.error('Enter amount'); return; }
+    if (!/^[0-9]+(\.[0-9]+)?$/.test(amt)) { toast.error('Invalid amount'); return; }
+    if (parseFloat(amt) <= 0) { toast.error('Amount must be greater than 0'); return; }
+    setDonating(true);
+    try {
+      await axios.post(`${Api_Base_Url}/api/donation/`, { amount: amt }, {
+        headers: {
+          'Authorization': `Bearer ${user.accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      toast.success('Donation successful. Thank you!');
+      // Refresh profile to update balance (if backend deducts from balance)
+      fetchProfile(user.accessToken);
+      setDonationMode(false);
+      setDonationAmount('');
+    } catch (err) {
+      console.error('[Profile.jsx] Donation error:', err);
+      let message = 'Donation failed';
+      const data = err.response?.data;
+      if (data) {
+        if (typeof data === 'string') message = data;
+        else if (data.detail) message = data.detail;
+        else message = Object.entries(data).map(([k,v]) => `${k}: ${Array.isArray(v)? v.join(', '): v}`).join('\n');
+      }
+      toast.error(message);
+    } finally {
+      setDonating(false);
+    }
+  };
+
   const sidebarItems = [
     { id: 'account', label: 'Account info', icon: '👤' },
-    { id: 'transactions', label: 'My transaction', icon: '💳' },
+    { id: 'transactions', label: 'Transaction History', icon: '💳' },
     { id: 'password', label: 'Change password', icon: '🔒' }
   ];
 
@@ -555,9 +596,47 @@ export default function Profile() {
                 {/* Page Title */}
                 <div className="flex items-start justify-between mb-10">
                   <div className="text-black text-2xl font-bold font-['Inter'] capitalize leading-7">Account info</div>
-                  <div className="bg-white border border-green-100 shadow-sm rounded-xl px-5 py-3 flex flex-col items-start min-w-[170px] relative overflow-hidden">
-                    <span className="text-xs uppercase tracking-wide text-gray-500 mb-1">Balance</span>
-                    <div className="text-2xl font-bold text-green-600 flex items-center gap-1">৳{profile?.balance || '0.00'}</div>
+                  <div className="bg-white border border-green-100 shadow-sm rounded-xl px-4 py-3 flex flex-col items-stretch min-w-[190px] relative overflow-hidden">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs uppercase tracking-wide text-gray-500">Balance</span>
+                      {!donationMode && (
+                        <button
+                          type="button"
+                          onClick={handleStartDonation}
+                          className="text-[10px] px-2 py-1 rounded-md bg-green-600 text-white hover:bg-green-700 transition md:text-xs"
+                        >Donate</button>
+                      )}
+                    </div>
+                    <div className="text-2xl font-bold text-green-600 flex items-center gap-1 mt-1">৳{profile?.balance || '0.00'}</div>
+                    {donationMode && (
+                      <div className="mt-3 flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min="1"
+                            placeholder="Amount"
+                            value={donationAmount}
+                            onChange={(e)=> setDonationAmount(e.target.value)}
+                            className="w-full h-9 px-2 text-sm border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <button
+                            type="button"
+                            onClick={handleSubmitDonation}
+                            disabled={donating}
+                            className={`flex-1 h-9 rounded-md font-semibold text-white ${donating ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} transition`}
+                          >{donating ? 'Sending...' : 'Send'}</button>
+                          <button
+                            type="button"
+                            onClick={handleCancelDonation}
+                            disabled={donating}
+                            className="h-9 px-3 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 flex items-center justify-center"
+                          >Cancel</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -616,7 +695,7 @@ export default function Profile() {
                 </div>
 
                 {/* Reference Code (one-time) - Only show for non-shop owners */}
-                {user?.role !== 'shop_owner' && (
+                {/* {user?.role !== 'shop_owner' && ( */}
                   <div className="mb-8">
                     <div className="mb-1 flex items-center justify-between">
                       <span className="text-black text-sm font-normal font-['Inter'] leading-tight">Reference Phone</span>
@@ -638,7 +717,7 @@ export default function Profile() {
                       />
                     </div>
                   </div>
-                )}
+                {/* )} */}
 
                 {/* Location Fields with dynamic selects */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
@@ -701,7 +780,7 @@ export default function Profile() {
                   {imageFile && (
                     <button
                       type="button"
-                      onClick={() => { setImageFile(null); setImagePreview(null); }}
+                      onClick={() => { setImageFile(null); }}
                       className="text-xs text-red-600 hover:underline"
                     >Remove new image</button>
                   )}
@@ -714,7 +793,7 @@ export default function Profile() {
             {activeSection === 'transactions' && (
               <>
                 <div className="text-black text-2xl font-bold font-['Inter'] capitalize leading-7 mb-6">
-                  My Transaction
+                  My History
                 </div>
                 <div className="mb-4 overflow-x-auto">
                   <div className="inline-flex whitespace-nowrap rounded-lg border border-gray-200 bg-white overflow-hidden">
@@ -722,17 +801,22 @@ export default function Profile() {
                       type="button"
                       onClick={() => setTransactionTab('trade')}
                       className={`px-4 py-2 text-sm font-medium transition ${transactionTab==='trade' ? 'bg-green-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
-                    >Buying History</button>
+                    >Buying</button>
                     <button
                       type="button"
                       onClick={() => setTransactionTab('wallet')}
                       className={`px-4 py-2 text-sm font-medium transition border-l border-gray-200 ${transactionTab==='wallet' ? 'bg-green-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
-                    >Bonus History</button>
+                    >Bonus </button>
                     <button
                       type="button"
                       onClick={() => setTransactionTab('currency')}
                       className={`px-4 py-2 text-sm font-medium transition border-l border-gray-200 ${transactionTab==='currency' ? 'bg-green-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
-                    >Transaction History</button>
+                    >Transaction </button>
+                    <button
+                      type="button"
+                      onClick={() => setTransactionTab('donation')}
+                      className={`px-4 py-2 text-sm font-medium transition border-l border-gray-200 ${transactionTab==='donation' ? 'bg-green-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >Donation</button>
                   </div>
                 </div>
                 {transactionTab === 'trade' && (
@@ -743,6 +827,9 @@ export default function Profile() {
                 )}
                 {transactionTab === 'currency' && (
                   <CurrencyTransaction token={user?.accessToken} />
+                )}
+                {transactionTab === 'donation' && (
+                  <DonationTransaction token={user?.accessToken} />
                 )}
               </>
             )}

@@ -10,6 +10,20 @@ export default function TradeTransaction({ token }) {
 	const [next, setNext] = useState(null);
 	const [count, setCount] = useState(0);
 
+	// Uniform date/time formatting (UTC -> local)
+	const formatDateTime = (dateString) => {
+		if (!dateString) return '';
+		try {
+			const date = new Date(dateString);
+			return date.toLocaleString('en-US', {
+				year: 'numeric', month: 'short', day: 'numeric',
+				hour: '2-digit', minute: '2-digit', hour12: true
+			});
+		} catch {
+			return dateString;
+		}
+	};
+
 	const fetchData = useCallback(async ({ reset = false } = {}) => {
 		if (!token) return;
 		try {
@@ -86,7 +100,7 @@ export default function TradeTransaction({ token }) {
 
 
 							<div className="text-[11px] text-gray-400 flex items-center justify-between">
-								<span>{tx.created_at}</span>
+								<span>{formatDateTime(tx.created_at)}</span>
 								{tx.shop_display && <span className="truncate max-w-[50%] text-right">{tx.shop_display}</span>}
 							</div>
 						</div>

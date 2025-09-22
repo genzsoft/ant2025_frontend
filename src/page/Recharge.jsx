@@ -77,21 +77,16 @@ export default function Recharge() {
     if (e && typeof e.preventDefault === 'function') e.preventDefault();
     setError('');
 
-    // basic validation
-    if (!cashInForm.account || !cashInForm.amount) {
-      setError('Please provide account number and amount.');
+    // basic validation (account number no longer required/validated)
+    if (!cashInForm.amount) {
+      setError('Please provide amount.');
       return;
     }
     if (!cashInForm.trxId) {
       setError('Please provide transaction ID.');
       return;
     }
-    // optional: enforce 11-digit phone
-    const phoneOnly = cashInForm.account.replace(/\D/g, '');
-    if (phoneOnly.length < 10) {
-      setError('Please enter a valid receiver phone number.');
-      return;
-    }
+    // Account number validation removed per request
 
     if (!shopId) {
       setError('Shop information not found. Please reload and try again.');
@@ -222,17 +217,11 @@ export default function Recharge() {
     setError('');
 
     if (mode === 'cashin') {
-      // validate Cash In form
-      if (!cashInForm.account || !cashInForm.amount) {
-        setError('Please provide account number and amount.');
+      // validate Cash In form (account number no longer required)
+      if (!cashInForm.amount) {
+        setError('Please provide amount.');
         return;
       }
-      const phoneOnly = cashInForm.account.replace(/\D/g, '');
-      if (phoneOnly.length < 10) {
-        setError('Please enter a valid receiver phone number.');
-        return;
-      }
-      // set action to Cash In submit
       holdActionRef.current = () => submitCashIn();
     } else {
       // default: topup (send)

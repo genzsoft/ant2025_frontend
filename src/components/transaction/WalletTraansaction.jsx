@@ -10,6 +10,19 @@ export default function WalletTransaction({ token }) {
 	const [next, setNext] = useState(null);
 	const [count, setCount] = useState(0);
 
+	const formatDateTime = (dateString) => {
+		if (!dateString) return '';
+		try {
+			const date = new Date(dateString);
+			return date.toLocaleString('en-US', {
+				year: 'numeric', month: 'short', day: 'numeric',
+				hour: '2-digit', minute: '2-digit', hour12: true
+			});
+		} catch {
+			return dateString;
+		}
+	};
+
 	const fetchData = useCallback(async ({ reset = false } = {}) => {
 		if (!token) return;
 		try {
@@ -76,7 +89,7 @@ export default function WalletTransaction({ token }) {
 							{tx.user_number && <span>User: {tx.user_number}</span>}
 						</div>
 						<div className="text-[11px] text-gray-400 flex items-center justify-between">
-							<span>{tx.created_at}</span>
+							<span>{formatDateTime(tx.created_at)}</span>
 							<span className="font-semibold text-lg text-gray-800">৳{tx.amount}</span>
 
 						</div>
