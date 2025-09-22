@@ -10,18 +10,35 @@ export default function TradeTransaction({ token }) {
 	const [next, setNext] = useState(null);
 	const [count, setCount] = useState(0);
 
-	// Uniform date/time formatting (UTC -> local)
+	// Uniform date/time formatting (supports backend human format like "Sep. 21, 2025, 6:47 p.m.")
 	const formatDateTime = (dateString) => {
 		if (!dateString) return '';
-		try {
-			const date = new Date(dateString);
-			return date.toLocaleString('en-US', {
-				year: 'numeric', month: 'short', day: 'numeric',
-				hour: '2-digit', minute: '2-digit', hour12: true
-			});
-		} catch {
-			return dateString;
+		let raw = String(dateString).trim();
+		// If native Date parses it, use that
+		let parsed = new Date(raw);
+		if (!isNaN(parsed.getTime())) {
+			return parsed.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 		}
+		// Handle Django humanized format: "Sep. 21, 2025, 6:47 p.m." or "Sept. 21, 2025, 6:47 p.m." etc.
+		// Normalize: remove trailing periods in month, convert p.m./a.m. to PM/AM, and ensure comma separation.
+		try {
+			let work = raw;
+			// Replace multiple spaces
+			work = work.replace(/\s+/g, ' ');
+			// Normalize month abbreviations with period -> remove period (Sep. -> Sep)
+			work = work.replace(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\./i, (m, g1) => (g1.toLowerCase() === 'sept' ? 'Sep' : g1));
+			// Normalize a.m./p.m. -> AM/PM
+			work = work.replace(/\b(a|p)\.m\./gi, (m, ap) => ap.toUpperCase() + 'M');
+			// Some formats have comma after year already. Ensure we keep primary structure: Mon DD, YYYY, HH:MM AM
+			// Remove ordinal suffixes if any (21st -> 21)
+			work = work.replace(/(\d{1,2})(st|nd|rd|th)/g, '$1');
+			parsed = new Date(work);
+			if (!isNaN(parsed.getTime())) {
+				return parsed.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+			}
+		} catch {/* ignore */}
+		// Final fallback: return original string
+		return raw;
 	};
 
 	const fetchData = useCallback(async ({ reset = false } = {}) => {
@@ -32,9 +49,12 @@ export default function TradeTransaction({ token }) {
 			const url = `${Api_Base_Url}/api/trade-transactions/?page=${page}`;
 			const res = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
 			const { results = [], next = null, count = 0 } = res.data || {};
+			console.log('Fetched trade transactions:', { results, next, count });
+			
 			setCount(count);
 			setNext(next);
 			setItems(prev => reset ? results : [...prev, ...results]);
+			
 		} catch (err) {
 			console.error('[TradeTransaction] fetch error', err);
 			setError('Failed to load trade transactions');

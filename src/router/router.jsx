@@ -17,12 +17,14 @@ import ViewInShop from "../page/ViewInShop";
 import ProtectedRoute from "../components/auth/ProtectedRoute";
 import TermsCon from "../page/TermsCon";
 import ProvacyPolicy from "../page/ProvacyPolicy";
+import NotFound from "../page/NotFound";
 
 
 export const router = createBrowserRouter([
   {
     path: "/",
     element: <Root></Root>,
+    errorElement: <NotFound />, // fallback for unexpected route errors
     children: [
   { path: "/", element: <Home></Home> },
   { path: "/product", element: <Product /> },
@@ -54,6 +56,7 @@ export const router = createBrowserRouter([
   { path: "/profile", element: <Profile /> },
   { path: "/terms", element: <TermsCon /> },
   { path: "/privacy", element: <ProvacyPolicy /> },
+  { path: "*", element: <NotFound /> },
     ]
   }
 ]);

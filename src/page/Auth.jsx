@@ -146,18 +146,38 @@ export default function Auth() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    // Remove all whitespace characters to block spaces entirely
-    const sanitized = value.replace(/\s+/g, '');
-    setFormData(prev => ({
-      ...prev,
-      [name]: sanitized
-    }));
+    // Base sanitization: remove whitespace
+    let sanitized = value.replace(/\s+/g, '');
+    if (name === 'phone') {
+      // Allow only digits and enforce max 11 characters
+      sanitized = sanitized.replace(/[^0-9]/g, '').slice(0, 11);
+    }
+    if (name === 'otp') {
+      sanitized = sanitized.replace(/[^0-9]/g, '').slice(0, 6);
+    }
+    setFormData(prev => ({ ...prev, [name]: sanitized }));
   };
 
   // Prevent entering space via keyboard
   const handlePreventSpace = (e) => {
-    if (e.key === ' ') {
+    if (e.key === ' ') e.preventDefault();
+  };
+
+  const handlePhoneKeyDown = (e) => {
+    // Allow control/navigation keys
+    const allowed = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End'];
+    if (allowed.includes(e.key)) return;
+    // Block space explicitly (already handled) and non-digits
+    if (!/^[0-9]$/.test(e.key)) {
       e.preventDefault();
+    }
+    // Enforce max length at keydown level
+    if (formData.phone && formData.phone.length >= 11) {
+      // If selection covers characters, allow replacing
+      const selection = e.target.selectionEnd - e.target.selectionStart;
+      if (selection === 0) {
+        e.preventDefault();
+      }
     }
   };
 
@@ -166,6 +186,11 @@ export default function Auth() {
     setError('');
     
     if (activeTab === 'signup' && signupStep === 'form') {
+      if (formData.phone.length !== 11) {
+        setError('Phone must be exactly 11 digits');
+        toast.error('Phone must be exactly 11 digits');
+        return;
+      }
       try {
         setLoading(true);
   await registerUser(formData.phone, formData.password);
@@ -257,6 +282,11 @@ export default function Auth() {
     setError('');
     
     try {
+      if (formData.phone.length !== 11) {
+        setError('Phone must be exactly 11 digits');
+        toast.error('Phone must be exactly 11 digits');
+        return;
+      }
       setLoading(true);
       
       // Call login API
@@ -464,8 +494,10 @@ export default function Auth() {
                               name="phone"
                               value={formData.phone}
                               onChange={handleInputChange}
-                              onKeyDown={handlePreventSpace}
+                              onKeyDown={(e) => { handlePreventSpace(e); handlePhoneKeyDown(e); }}
                               placeholder="Phone Number*"
+                              inputMode="numeric"
+                              maxLength={11}
                               className="w-full bg-transparent text-sm md:text-base font-semibold font-['Inter'] leading-normal placeholder:text-neutral-400 focus:outline-none"
                             />
                           </div>
@@ -505,8 +537,10 @@ export default function Auth() {
                               name="phone"
                               value={formData.phone}
                               onChange={handleInputChange}
-                              onKeyDown={handlePreventSpace}
+                              onKeyDown={(e) => { handlePreventSpace(e); handlePhoneKeyDown(e); }}
                               placeholder="Phone Number*"
+                              inputMode="numeric"
+                              maxLength={11}
                               className="w-full bg-transparent text-sm md:text-base font-semibold font-['Inter'] leading-normal placeholder:text-neutral-400 focus:outline-none"
                             />
                           </div>

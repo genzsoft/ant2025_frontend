@@ -12,15 +12,23 @@ export default function WalletTransaction({ token }) {
 
 	const formatDateTime = (dateString) => {
 		if (!dateString) return '';
-		try {
-			const date = new Date(dateString);
-			return date.toLocaleString('en-US', {
-				year: 'numeric', month: 'short', day: 'numeric',
-				hour: '2-digit', minute: '2-digit', hour12: true
-			});
-		} catch {
-			return dateString;
+		let raw = String(dateString).trim();
+		let parsed = new Date(raw);
+		if (!isNaN(parsed.getTime())) {
+			return parsed.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 		}
+		try {
+			let work = raw;
+			work = work.replace(/\s+/g, ' ');
+			work = work.replace(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\./i, (m, g1) => (g1.toLowerCase() === 'sept' ? 'Sep' : g1));
+			work = work.replace(/\b(a|p)\.m\./gi, (m, ap) => ap.toUpperCase() + 'M');
+			work = work.replace(/(\d{1,2})(st|nd|rd|th)/g, '$1');
+			parsed = new Date(work);
+			if (!isNaN(parsed.getTime())) {
+				return parsed.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+			}
+		} catch {/* ignore */}
+		return raw;
 	};
 
 	const fetchData = useCallback(async ({ reset = false } = {}) => {

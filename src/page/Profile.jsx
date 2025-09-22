@@ -28,15 +28,7 @@ export default function Profile() {
     district: '',
     upazila: ''
   });
-  const [divisions, setDivisions] = useState([]);
-  const [districts, setDistricts] = useState([]);
-  const [upazilas, setUpazilas] = useState([]);
-  const [loadingDivisions, setLoadingDivisions] = useState(false);
-  const [loadingDistricts, setLoadingDistricts] = useState(false);
-  const [loadingUpazilas, setLoadingUpazilas] = useState(false);
-  const [selectedDivisionId, setSelectedDivisionId] = useState('');
-  const [selectedDistrictId, setSelectedDistrictId] = useState('');
-  const [selectedUpazilaId, setSelectedUpazilaId] = useState('');
+
   const locationPresetRef = React.useRef(null);
   const [imageFile, setImageFile] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -55,6 +47,15 @@ export default function Profile() {
   const [donationMode, setDonationMode] = useState(false);
   const [donationAmount, setDonationAmount] = useState('');
   const [donating, setDonating] = useState(false);
+  // Hold-to-confirm for donation
+  const [showDonationHold, setShowDonationHold] = useState(false);
+  const [donationHoldProgress, setDonationHoldProgress] = useState(0); // 0-100
+  const [donationHoldStarted, setDonationHoldStarted] = useState(false); // track if we showed start toast
+  const donationHoldTimerRef = React.useRef(null);
+  const donationHoldStartRef = React.useRef(null);
+  const DONATION_HOLD_DURATION = 2000; // ms
+  const DONATION_PROGRESS_RADIUS = 54;
+  const DONATION_CIRCUMFERENCE = 2 * Math.PI * DONATION_PROGRESS_RADIUS;
 
   // Fetch profile from backend
   const fetchProfile = useCallback(async (accessToken) => {
@@ -94,121 +95,121 @@ export default function Profile() {
   }, []);
 
   // Fetch divisions
-  const fetchDivisions = useCallback(async () => {
-    try {
-      setLoadingDivisions(true);
-      const res = await axios.get(`${Api_Base_Url}/api/locations/divisions/`);
-      setDivisions(res.data || []);
-    } catch (err) {
-      console.error('[Profile.jsx] Failed to load divisions', err);
-      toast.error('Failed to load divisions');
-    } finally {
-      setLoadingDivisions(false);
-    }
-  }, []);
+  // const fetchDivisions = useCallback(async () => {
+  //   try {
+  //     setLoadingDivisions(true);
+  //     const res = await axios.get(`${Api_Base_Url}/api/locations/divisions/`);
+  //     setDivisions(res.data || []);
+  //   } catch (err) {
+  //     console.error('[Profile.jsx] Failed to load divisions', err);
+  //     toast.error('Failed to load divisions');
+  //   } finally {
+  //     setLoadingDivisions(false);
+  //   }
+  // }, []);
 
   // Fetch upazilas for district id
-  const fetchUpazilas = useCallback(async (districtId, preselectName) => {
-    if (!districtId) { setUpazilas([]); setSelectedUpazilaId(''); return; }
-    try {
-      setLoadingUpazilas(true);
-      const res = await axios.get(`${Api_Base_Url}/api/locations/districts/${districtId}/upazilas/`);
-      setUpazilas(res.data || []);
-      if (preselectName) {
-        const match = (res.data || []).find(u => u.name === preselectName);
-        if (match) {
-          setSelectedUpazilaId(match.id.toString());
-          setFormData(prev => ({ ...prev, upazila: match.name }));
-        }
-      }
-    } catch (err) {
-      console.error('[Profile.jsx] Failed to load upazilas', err);
-      toast.error('Failed to load upazilas');
-    } finally {
-      setLoadingUpazilas(false);
-    }
-  }, []);
+  // const fetchUpazilas = useCallback(async (districtId, preselectName) => {
+  //   if (!districtId) { setUpazilas([]); setSelectedUpazilaId(''); return; }
+  //   try {
+  //     setLoadingUpazilas(true);
+  //     const res = await axios.get(`${Api_Base_Url}/api/locations/districts/${districtId}/upazilas/`);
+  //     setUpazilas(res.data || []);
+  //     if (preselectName) {
+  //       const match = (res.data || []).find(u => u.name === preselectName);
+  //       if (match) {
+  //         setSelectedUpazilaId(match.id.toString());
+  //         setFormData(prev => ({ ...prev, upazila: match.name }));
+  //       }
+  //     }
+  //   } catch (err) {
+  //     console.error('[Profile.jsx] Failed to load upazilas', err);
+  //     toast.error('Failed to load upazilas');
+  //   } finally {
+  //     setLoadingUpazilas(false);
+  //   }
+  // }, []);
 
   // Fetch districts for division id
-  const fetchDistricts = useCallback(async (divisionId, preselectName) => {
-    if (!divisionId) { setDistricts([]); setSelectedDistrictId(''); return; }
-    try {
-      setLoadingDistricts(true);
-      const res = await axios.get(`${Api_Base_Url}/api/locations/divisions/${divisionId}/districts/`);
-      setDistricts(res.data || []);
-      if (preselectName) {
-        const match = (res.data || []).find(d => d.name === preselectName);
-        if (match) {
-          setSelectedDistrictId(match.id.toString());
-          setFormData(prev => ({ ...prev, district: match.name }));
-          // Also fetch upazilas and preset if we have upazila data
-          if (locationPresetRef.current && locationPresetRef.current.upazila) {
-            fetchUpazilas(match.id.toString(), locationPresetRef.current.upazila);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('[Profile.jsx] Failed to load districts', err);
-      toast.error('Failed to load districts');
-    } finally {
-      setLoadingDistricts(false);
-    }
-  }, [fetchUpazilas]);
-  useEffect(() => {
-    fetchDivisions();
-  }, [fetchDivisions]);
+  // const fetchDistricts = useCallback(async (divisionId, preselectName) => {
+  //   if (!divisionId) { setDistricts([]); setSelectedDistrictId(''); return; }
+  //   try {
+  //     setLoadingDistricts(true);
+  //     const res = await axios.get(`${Api_Base_Url}/api/locations/divisions/${divisionId}/districts/`);
+  //     setDistricts(res.data || []);
+  //     if (preselectName) {
+  //       const match = (res.data || []).find(d => d.name === preselectName);
+  //       if (match) {
+  //         setSelectedDistrictId(match.id.toString());
+  //         setFormData(prev => ({ ...prev, district: match.name }));
+  //         // Also fetch upazilas and preset if we have upazila data
+  //         if (locationPresetRef.current && locationPresetRef.current.upazila) {
+  //           fetchUpazilas(match.id.toString(), locationPresetRef.current.upazila);
+  //         }
+  //       }
+  //     }
+  //   } catch (err) {
+  //     console.error('[Profile.jsx] Failed to load districts', err);
+  //     toast.error('Failed to load districts');
+  //   } finally {
+  //     setLoadingDistricts(false);
+  //   }
+  // }, [fetchUpazilas]);
+  // useEffect(() => {
+  //   fetchDivisions();
+  // }, [fetchDivisions]);
 
   // Preset location dropdowns after divisions are loaded and profile data is available
-  useEffect(() => {
-    if (divisions.length > 0 && locationPresetRef.current) {
-      const locationData = locationPresetRef.current;
+  // useEffect(() => {
+  //   if (divisions.length > 0 && locationPresetRef.current) {
+  //     const locationData = locationPresetRef.current;
       
-      // Find and set division
-      if (locationData.division) {
-        const divisionMatch = divisions.find(d => d.name === locationData.division);
-        if (divisionMatch) {
-          setSelectedDivisionId(divisionMatch.id.toString());
-          // Fetch districts for this division and preset district
-          fetchDistricts(divisionMatch.id.toString(), locationData.district);
-        }
-      }
+  //     // Find and set division
+  //     if (locationData.division) {
+  //       const divisionMatch = divisions.find(d => d.name === locationData.division);
+  //       if (divisionMatch) {
+  //         setSelectedDivisionId(divisionMatch.id.toString());
+  //         // Fetch districts for this division and preset district
+  //         fetchDistricts(divisionMatch.id.toString(), locationData.district);
+  //       }
+  //     }
       
-      // Clear the preset data after use
-      locationPresetRef.current = null;
-    }
-  }, [divisions, fetchDistricts]);
+  //     // Clear the preset data after use
+  //     locationPresetRef.current = null;
+  //   }
+  // }, [divisions, fetchDistricts]);
 
   // When division changes manually by user
-  useEffect(() => {
-    if (selectedDivisionId) {
-      const divObj = divisions.find(d => d.id.toString() === selectedDivisionId);
-      setFormData(prev => ({ ...prev, division: divObj ? divObj.name : '' , district: '', upazila: ''}));
-      setSelectedDistrictId('');
-      setSelectedUpazilaId('');
-      setDistricts([]);
-      setUpazilas([]);
-      fetchDistricts(selectedDivisionId);
-    }
-  }, [selectedDivisionId, divisions, fetchDistricts]);
+  // useEffect(() => {
+  //   if (selectedDivisionId) {
+  //     const divObj = divisions.find(d => d.id.toString() === selectedDivisionId);
+  //     setFormData(prev => ({ ...prev, division: divObj ? divObj.name : '' , district: '', upazila: ''}));
+  //     setSelectedDistrictId('');
+  //     setSelectedUpazilaId('');
+  //     setDistricts([]);
+  //     setUpazilas([]);
+  //     fetchDistricts(selectedDivisionId);
+  //   }
+  // }, [selectedDivisionId, divisions, fetchDistricts]);
 
   // When district changes manually by user
-  useEffect(() => {
-    if (selectedDistrictId) {
-      const distObj = districts.find(d => d.id.toString() === selectedDistrictId);
-      setFormData(prev => ({ ...prev, district: distObj ? distObj.name : '', upazila: '' }));
-      setSelectedUpazilaId('');
-      setUpazilas([]);
-      fetchUpazilas(selectedDistrictId);
-    }
-  }, [selectedDistrictId, districts, fetchUpazilas]);
+  // useEffect(() => {
+  //   if (selectedDistrictId) {
+  //     const distObj = districts.find(d => d.id.toString() === selectedDistrictId);
+  //     setFormData(prev => ({ ...prev, district: distObj ? distObj.name : '', upazila: '' }));
+  //     setSelectedUpazilaId('');
+  //     setUpazilas([]);
+  //     fetchUpazilas(selectedDistrictId);
+  //   }
+  // }, [selectedDistrictId, districts, fetchUpazilas]);
 
   // When upazila changes manually
-  useEffect(() => {
-    if (selectedUpazilaId) {
-      const upObj = upazilas.find(u => u.id.toString() === selectedUpazilaId);
-      setFormData(prev => ({ ...prev, upazila: upObj ? upObj.name : '' }));
-    }
-  }, [selectedUpazilaId, upazilas]);
+  // useEffect(() => {
+  //   if (selectedUpazilaId) {
+  //     const upObj = upazilas.find(u => u.id.toString() === selectedUpazilaId);
+  //     setFormData(prev => ({ ...prev, upazila: upObj ? upObj.name : '' }));
+  //   }
+  // }, [selectedUpazilaId, upazilas]);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -241,11 +242,11 @@ export default function Profile() {
             upazila: parsed.upazila || ''
         }));
         // Set profile location data for preset after divisions are loaded
-        locationPresetRef.current = {
-          division: parsed.division || '',
-          district: parsed.district || '',
-          upazila: parsed.upazila || ''
-        };
+        // locationPresetRef.current = {
+        //   division: parsed.division || '',
+        //   district: parsed.district || '',
+        //   upazila: parsed.upazila || ''
+        // };
         setLoading(false); // show cached immediately
   } catch { /* ignore */ }
     }
@@ -396,25 +397,25 @@ export default function Profile() {
       });
       
       // Update location dropdown selections to match the saved data
-      if (response.data.division && divisions.length > 0) {
-        const divMatch = divisions.find(d => d.name === response.data.division);
-        if (divMatch) {
-          setSelectedDivisionId(divMatch.id.toString());
-        }
-      }
-      if (response.data.district && districts.length > 0) {
-        const distMatch = districts.find(d => d.name === response.data.district);
-        if (distMatch) {
-          setSelectedDistrictId(distMatch.id.toString());
+      // if (response.data.division && divisions.length > 0) {
+      //   const divMatch = divisions.find(d => d.name === response.data.division);
+      //   if (divMatch) {
+      //     setSelectedDivisionId(divMatch.id.toString());
+      //   }
+      // }
+      // if (response.data.district && districts.length > 0) {
+      //   const distMatch = districts.find(d => d.name === response.data.district);
+      //   if (distMatch) {
+      //     setSelectedDistrictId(distMatch.id.toString());
 
-        }
-      }
-      if (response.data.upazila && upazilas.length > 0) {
-        const upMatch = upazilas.find(u => u.name === response.data.upazila);
-        if (upMatch) {
-          setSelectedUpazilaId(upMatch.id.toString());
-        }
-      }
+      //   }
+      // }
+      // if (response.data.upazila && upazilas.length > 0) {
+      //   const upMatch = upazilas.find(u => u.name === response.data.upazila);
+      //   if (upMatch) {
+      //     setSelectedUpazilaId(upMatch.id.toString());
+      //   }
+      // }
       
       // Clear image selection
       setImageFile(null);
@@ -519,6 +520,76 @@ export default function Profile() {
       setDonating(false);
     }
   };
+
+  // Donation hold overlay helpers
+  const validateDonationAndOpenHold = () => {
+    if (donating) return;
+    if (!user) { toast.error('Not authenticated'); return; }
+    const amt = donationAmount.trim();
+    if (!amt) { toast.error('Enter amount'); return; }
+    if (!/^[0-9]+(\.[0-9]+)?$/.test(amt)) { toast.error('Invalid amount'); return; }
+    if (parseFloat(amt) <= 0) { toast.error('Amount must be greater than 0'); return; }
+    setDonationHoldProgress(0);
+    setShowDonationHold(true);
+  };
+
+  const startDonationHold = () => {
+    if (donating) return;
+    // Clear any existing timer
+    if (donationHoldTimerRef.current) {
+      clearInterval(donationHoldTimerRef.current);
+      donationHoldTimerRef.current = null;
+    }
+    donationHoldStartRef.current = performance.now();
+    setDonationHoldProgress(0);
+    if (!donationHoldStarted) {
+      toast.info('Keep holding to confirm donation...');
+      setDonationHoldStarted(true);
+    }
+    donationHoldTimerRef.current = setInterval(() => {
+      const now = performance.now();
+      const elapsed = now - (donationHoldStartRef.current || now);
+      const p = Math.min(100, Math.round((elapsed / DONATION_HOLD_DURATION) * 100));
+      setDonationHoldProgress(p);
+      if (p >= 100) {
+        clearInterval(donationHoldTimerRef.current);
+        donationHoldTimerRef.current = null;
+        donationHoldStartRef.current = null;
+        setTimeout(() => {
+          // Subtle vibration feedback on supported mobile devices
+          try {
+            if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+              navigator.vibrate(60); // 60ms light buzz
+            }
+          } catch {/* ignore vibration errors */}
+          setShowDonationHold(false);
+          handleSubmitDonation();
+          setDonationHoldProgress(0);
+          setDonationHoldStarted(false);
+        }, 120);
+      }
+    }, 30);
+  };
+
+  const cancelDonationHold = () => {
+    if (donationHoldTimerRef.current) {
+      clearInterval(donationHoldTimerRef.current);
+      donationHoldTimerRef.current = null;
+    }
+    donationHoldStartRef.current = null;
+    if (donationHoldProgress > 0 && donationHoldProgress < 100 && donationHoldStarted) {
+      toast.info('Donation hold cancelled');
+    }
+    setDonationHoldProgress(0);
+    setDonationHoldStarted(false);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (donationHoldTimerRef.current) cancelAnimationFrame(donationHoldTimerRef.current);
+    };
+  }, []);
 
   const sidebarItems = [
     { id: 'account', label: 'Account info', icon: '👤' },
@@ -693,7 +764,7 @@ export default function Profile() {
                         <div className="flex items-center gap-2 text-xs">
                           <button
                             type="button"
-                            onClick={handleSubmitDonation}
+                            onClick={validateDonationAndOpenHold}
                             disabled={donating}
                             className={`flex-1 h-9 rounded-md font-semibold text-white ${donating ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} transition`}
                           >{donating ? 'Sending...' : 'Send'}</button>
@@ -789,9 +860,9 @@ export default function Profile() {
                 {/* )} */}
 
                 {/* Location Fields with dynamic selects */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12"> */}
                   {/* Division */}
-                  <div className="flex flex-col">
+                  {/* <div className="flex flex-col">
                     <label className="mb-1 text-black text-sm font-normal">Division</label>
                     <select
                       value={selectedDivisionId}
@@ -804,9 +875,9 @@ export default function Profile() {
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
                     </select>
-                  </div>
+                  </div> */}
                   {/* District */}
-                  <div className="flex flex-col">
+                  {/* <div className="flex flex-col">
                     <label className="mb-1 text-black text-sm font-normal">District</label>
                     <select
                       value={selectedDistrictId}
@@ -819,9 +890,9 @@ export default function Profile() {
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
                     </select>
-                  </div>
+                  </div> */}
                   {/* Upazila */}
-                  <div className="flex flex-col">
+                  {/* <div className="flex flex-col">
                     <label className="mb-1 text-black text-sm font-normal">Upazila</label>
                     <select
                       value={selectedUpazilaId}
@@ -835,7 +906,7 @@ export default function Profile() {
                       ))}
                     </select>
                   </div>
-                </div>
+                </div> */}
 
                 {/* Save Button */}
                 <div className="flex items-center gap-4">
@@ -970,8 +1041,63 @@ export default function Profile() {
           </div>
           </div>
           {/* Legacy absolute logout removed (moved into sidebar) */}
-        </div>
+          </div>
       </div>
+
+        {/* Donation Hold-to-confirm overlay */}
+        {showDonationHold && (
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+            <div className="w-full max-w-sm">
+              <div className="bg-white rounded-2xl p-6 text-center relative shadow-xl">
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => { cancelDonationHold(); setShowDonationHold(false); }}
+                  className="absolute right-3 top-3 p-2 rounded-full text-gray-500 hover:bg-gray-100"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Hold to Confirm</h3>
+                <p className="text-xs text-gray-500 mb-4">Donate ৳{donationAmount || '0'} to ANT Foundation</p>
+                <div className="text-sm font-medium mb-4">Amount: <span className="text-green-600 font-semibold">৳{donationAmount || '0'}</span></div>
+                <div
+                  className="mx-auto relative w-40 h-40 select-none"
+                  onPointerDown={(e) => { e.preventDefault(); startDonationHold(); }}
+                  onPointerUp={cancelDonationHold}
+                  onPointerLeave={cancelDonationHold}
+                >
+                  <svg className="w-40 h-40 transform -rotate-90" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="54" stroke="#E5E7EB" strokeWidth="10" fill="none" />
+                    <circle
+                      cx="60" cy="60" r="54"
+                      stroke="#10B981" strokeWidth="10" fill="none" strokeLinecap="round"
+                      style={{
+                        strokeDasharray: DONATION_CIRCUMFERENCE,
+                        strokeDashoffset: DONATION_CIRCUMFERENCE - (donationHoldProgress / 100) * DONATION_CIRCUMFERENCE,
+                        transition: 'stroke-dashoffset 30ms linear'
+                      }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <svg className="w-16 h-16 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 11.5c2.5 0 3.5 2 3.5 4.5M8 11c1-1.5 2.5-2 4-2s3 .5 4 2M6.5 9.5c1.5-2 3.5-3 5.5-3s4 .8 5.5 3M5 8c2-3 4.5-4 7-4s5 1 7 4M9.5 13.5c.5 1 .5 2 .5 3M12 13c1 1.5 1 3 1 4.5" />
+                    </svg>
+                  </div>
+                  <div className="absolute bottom-3 inset-x-0 text-[11px] text-gray-500">
+                    {donationHoldProgress < 100 ? `Hold ${Math.ceil((DONATION_HOLD_DURATION * (1 - donationHoldProgress / 100)) / 1000)}s` : 'Release'}
+                  </div>
+                </div>
+                <div className="mt-4 text-[11px] text-gray-500">Keep holding until the circle completes</div>
+              </div>
+            </div>
+          </div>
+        )}
     </section>
   );
 }
+
+// Donation Hold-to-confirm overlay
+// Placed after component for clarity if future extraction desired

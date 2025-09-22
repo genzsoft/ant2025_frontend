@@ -7,11 +7,11 @@ import { Api_Base_Url } from '../config/api.js';
 export default function Hero() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Fallback slides if API has no banners
   const fallbackSlides = useMemo(
     () => [
-      ],
+    ],
     []
   );
 
@@ -72,13 +72,13 @@ export default function Hero() {
         let list = Array.isArray(activeRes.data) ? activeRes.data : [];
         if ((!list || list.length === 0)) {
           // fallback: fetch all then filter by is_active
-            try {
-              const allRes = await axios.get(`${Api_Base_Url}/api/banners/`);
-              const allList = Array.isArray(allRes.data) ? allRes.data : [];
-              list = allList.filter(b => b && (b.is_active === true || b.is_active === 'true'));
-            } catch (innerErr) {
-              console.warn('Fallback banners fetch failed:', innerErr);
-            }
+          try {
+            const allRes = await axios.get(`${Api_Base_Url}/api/banners/`);
+            const allList = Array.isArray(allRes.data) ? allRes.data : [];
+            list = allList.filter(b => b && (b.is_active === true || b.is_active === 'true'));
+          } catch (innerErr) {
+            console.warn('Fallback banners fetch failed:', innerErr);
+          }
         }
         if (cancelled) return;
         const imgs = list
@@ -113,13 +113,13 @@ export default function Hero() {
     axios
       .get(`${Api_Base_Url}/api/products/`)
       .then((res) => {
-        
+
         if (!mounted) return;
         // Handle direct array response or nested response
-        const list = Array.isArray(res.data) 
-          ? res.data.slice(0, 5) 
-          : Array.isArray(res.data?.results) 
-            ? res.data.results.slice(0, 5) 
+        const list = Array.isArray(res.data)
+          ? res.data.slice(0, 5)
+          : Array.isArray(res.data?.results)
+            ? res.data.results.slice(0, 5)
             : [];
         setProducts(list);
       })
@@ -162,16 +162,16 @@ export default function Hero() {
             <br />
             that
             <span className="relative inline-block align-middle ml-1">
-              <img 
-                src="/Vector.png" 
-                alt="Background decoration" 
+              <img
+                src="/Vector.png"
+                alt="Background decoration"
                 className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[300px] h-auto z-0"
               />
               <span className="relative px-8 py-4 z-10">Matter</span>
             </span>
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-zinc-700">
-Advanced formulas and curated goods that balance effectiveness, safety, and sustainability.          </p>
+            Advanced formulas and curated goods that balance effectiveness, safety, and sustainability.          </p>
         </div>
 
         {/* slider (1520x650 ratio => 1520/650 ≈ 2.338) */}
@@ -238,11 +238,11 @@ Advanced formulas and curated goods that balance effectiveness, safety, and sust
               View all
             </button>
           </div>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
             {products.map((p) => (
-              <ProductCard 
-                key={p.id} 
+              <ProductCard
+                key={p.id}
                 imageSrc={p.image || '/api/placeholder/300/300'}
                 name={p.name}
                 price={parseFloat(p.price) || 0}
