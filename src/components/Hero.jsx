@@ -158,7 +158,7 @@ export default function Hero() {
         {/* heading */}
         <div className="mt-8 text-center">
           <h2 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-zinc-900 leading-tight">
-            Our product
+            Products
             <br />
             that
             <span className="relative inline-block align-middle ml-1">
@@ -167,12 +167,11 @@ export default function Hero() {
                 alt="Background decoration" 
                 className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[300px] h-auto z-0"
               />
-              <span className="relative px-8 py-4 z-10">Best</span>
+              <span className="relative px-8 py-4 z-10">Matter</span>
             </span>
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-zinc-700">
-            Finely processed product produce, safe guaranteed and secured investment platform.
-          </p>
+Advanced formulas and curated goods that balance effectiveness, safety, and sustainability.          </p>
         </div>
 
         {/* slider (1520x650 ratio => 1520/650 ≈ 2.338) */}
